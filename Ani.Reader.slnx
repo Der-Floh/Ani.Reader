@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Ani.Reader/Ani.Reader.csproj" />
+  <Project Path="ExampleAniReader/ExampleAniReader.csproj" Id="974a2eae-b398-4c17-b616-c3f94b6a7243" />
+  <Project Path="RealWorld_CursorDownloader/RealWorld_CursorDownloader.csproj" Id="71dbe645-0ce3-4f4b-99a2-7a0eb06243d0" />
+</Solution>

@@ -18,7 +18,14 @@ updates:
           - "minor"
           - "patch"
 
-    ignore:
-      - dependency-name: "*"
-        update-types:
-          - "version-update:semver-major"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+    groups:
+      actions:
+        patterns:
+          - "*"

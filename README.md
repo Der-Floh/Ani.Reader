@@ -53,7 +53,7 @@ using (var streamOrigin = File.OpenRead("path/to/cursor.ani"))
 ```
 
 - `copyStream: true` → The stream is **copied**, allowing access to frames even after the original stream is closed.
-- `copyStream: false` → The stream is **used directly**, making it as **memory-efficient as reading from a file**, but the stream must remain open while accessing frames.
+- `copyStream: false` → The stream is **used directly**, making it as **memory-efficient as reading from a file**, but the stream must be seekable and must remain open while accessing frames.
 
 > **Note:** All `Read()` overloads return `null` if the file does not exist, the format is unrecognised, or the data cannot be parsed.
 

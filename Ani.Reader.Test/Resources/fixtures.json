@@ -1,0 +1,163 @@
+{
+  "colors": {
+    "foreground": "#FF00CA",
+    "background": "#000000"
+  },
+  "files": [
+    {
+      "fileName": "test-anim-t.ani",
+      "isAnimated": true,
+      "frameCount": 3,
+      "displayRateJiffies": 10,
+      "transparentFrames": [ 1 ],
+      "sizes": [
+        {
+          "width": 32,
+          "height": 32,
+          "hotspotX": 15,
+          "hotspotY": 15,
+          "encoding": "BMP",
+          "bitCount": 32,
+          "reachableAsAnimation": true,
+          "transparentPixelsPerFrame": [ 0, 252, 0 ]
+        },
+        {
+          "width": 48,
+          "height": 48,
+          "hotspotX": 22,
+          "hotspotY": 22,
+          "encoding": "BMP",
+          "bitCount": 32,
+          "reachableAsAnimation": true,
+          "transparentPixelsPerFrame": [ 0, 256, 0 ]
+        },
+        {
+          "width": 64,
+          "height": 64,
+          "hotspotX": 30,
+          "hotspotY": 30,
+          "encoding": "PNG",
+          "bitCount": null,
+          "reachableAsAnimation": false,
+          "transparentPixelsPerFrame": [ 0, 1013, 0 ]
+        }
+      ]
+    },
+    {
+      "fileName": "test-static-big.cur",
+      "isAnimated": false,
+      "frameCount": 1,
+      "displayRateJiffies": 10,
+      "transparentFrames": [],
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "hotspotX": 128,
+          "hotspotY": 128,
+          "encoding": "PNG",
+          "bitCount": null,
+          "reachableAsAnimation": false,
+          "transparentPixelsPerFrame": [ 0 ]
+        }
+      ]
+    },
+    {
+      "fileName": "test-static-big-t.cur",
+      "isAnimated": false,
+      "frameCount": 1,
+      "displayRateJiffies": 10,
+      "transparentFrames": [ 0 ],
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "hotspotX": 128,
+          "hotspotY": 128,
+          "encoding": "PNG",
+          "bitCount": null,
+          "reachableAsAnimation": false,
+          "transparentPixelsPerFrame": [ 2304 ]
+        }
+      ]
+    },
+    {
+      "fileName": "test-static-small-multi.cur",
+      "isAnimated": false,
+      "frameCount": 1,
+      "displayRateJiffies": 10,
+      "transparentFrames": [],
+      "sizes": [
+        {
+          "width": 32,
+          "height": 32,
+          "hotspotX": 15,
+          "hotspotY": 15,
+          "encoding": "BMP",
+          "bitCount": 32,
+          "reachableAsAnimation": false,
+          "transparentPixelsPerFrame": [ 0 ]
+        },
+        {
+          "width": 48,
+          "height": 48,
+          "hotspotX": 22,
+          "hotspotY": 22,
+          "encoding": "BMP",
+          "bitCount": 32,
+          "reachableAsAnimation": false,
+          "transparentPixelsPerFrame": [ 0 ]
+        },
+        {
+          "width": 64,
+          "height": 64,
+          "hotspotX": 30,
+          "hotspotY": 30,
+          "encoding": "PNG",
+          "bitCount": null,
+          "reachableAsAnimation": false,
+          "transparentPixelsPerFrame": [ 0 ]
+        }
+      ]
+    },
+    {
+      "fileName": "test-static-small-multi-t.cur",
+      "isAnimated": false,
+      "frameCount": 1,
+      "displayRateJiffies": 10,
+      "transparentFrames": [ 0 ],
+      "sizes": [
+        {
+          "width": 32,
+          "height": 32,
+          "hotspotX": 15,
+          "hotspotY": 15,
+          "encoding": "BMP",
+          "bitCount": 32,
+          "reachableAsAnimation": false,
+          "transparentPixelsPerFrame": [ 36 ]
+        },
+        {
+          "width": 48,
+          "height": 48,
+          "hotspotX": 22,
+          "hotspotY": 22,
+          "encoding": "BMP",
+          "bitCount": 32,
+          "reachableAsAnimation": false,
+          "transparentPixelsPerFrame": [ 100 ]
+        },
+        {
+          "width": 64,
+          "height": 64,
+          "hotspotX": 30,
+          "hotspotY": 30,
+          "encoding": "PNG",
+          "bitCount": null,
+          "reachableAsAnimation": false,
+          "transparentPixelsPerFrame": [ 256 ]
+        }
+      ]
+    }
+  ]
+}

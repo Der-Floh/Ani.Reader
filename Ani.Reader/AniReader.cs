@@ -80,9 +80,12 @@ public sealed class AniReader
     /// <returns>An array of <see cref="AniData"/> objects, or <see langword="null"/> if the data cannot be read.</returns>
     public AniData[]? Read(Stream stream, bool copyStream = true)
     {
+        if (!copyStream && !stream.CanSeek)
+            throw new ArgumentException("A non-seekable stream must be copied. Call with copyStream: true.", nameof(stream));
+
         IDataSource dataSource = copyStream
             ? new StreamBufferSource(stream)
-            : new StreamSource(stream);
+            : new SharedStreamSource(stream);
 
         using var readStream = dataSource.GetStream();
 

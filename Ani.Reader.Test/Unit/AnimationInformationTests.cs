@@ -22,17 +22,33 @@ public sealed class AnimationInformationTests
     }
 
     [Theory]
-    [InlineData(48, 32, 32)]
-    [InlineData(32, 48, 32)]
-    [InlineData(32, 32, 24)]
-    public void Equality_DistinguishesEveryComponent(int width, int height, int bitCount)
+    [InlineData(48, 32)]
+    [InlineData(32, 48)]
+    public void Equality_DistinguishesBySize(int width, int height)
     {
         var left = Create(32, 32, 32);
-        var right = Create(width, height, bitCount);
+        var right = Create(width, height, 32);
 
         Assert.False(left == right);
         Assert.True(left != right);
         Assert.NotEqual(left, right);
+    }
+
+    /// <summary>
+    /// A frame may store the same variant at a smaller palette depth, so depth cannot be part of identity.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(24)]
+    public void Equality_IgnoresBitDepth(int bitCount)
+    {
+        var left = Create(32, 32, 32);
+        var right = Create(32, 32, bitCount);
+
+        Assert.True(left == right);
+        Assert.Equal(left, right);
+        Assert.Equal(left.GetHashCode(), right.GetHashCode());
     }
 
     /// <summary>

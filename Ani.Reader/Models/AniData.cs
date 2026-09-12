@@ -73,15 +73,27 @@ public class AniData
 
     /// <summary>
     /// Finds an image reference within an ICO file that matches the given animation properties.
+    /// <para>
+    /// Size takes priority over bit depth: a frame may store the requested size at a different depth than the
+    /// variant reports, and returning that image is always better than returning a different size.
+    /// </para>
     /// </summary>
     /// <param name="icoData">The ICO data containing multiple image references.</param>
     /// <param name="aniInfo">The animation frame information, specifying dimensions and bit depth.</param>
     /// <returns>The best matching <see cref="ImageReference"/> from the ICO data.</returns>
     public ImageReference FindByAnimationInformation(IcoData icoData, AnimationInformation aniInfo)
     {
-        return icoData.ImageReferences.FirstOrDefault(x =>
-            x.BitCount == aniInfo.BitCount && x.Width == aniInfo.Width && x.Height == aniInfo.Height)
-                ?? icoData.ImageReferences.First();
+        var exactMatch = icoData.ImageReferences.FirstOrDefault(x =>
+            x.BitCount == aniInfo.BitCount && x.Width == aniInfo.Width && x.Height == aniInfo.Height);
+        if (exactMatch is not null)
+            return exactMatch;
+
+        var sizeMatch = icoData.ImageReferences
+            .Where(x => x.Width == aniInfo.Width && x.Height == aniInfo.Height)
+            .OrderByDescending(EffectiveBitCount)
+            .FirstOrDefault();
+
+        return sizeMatch ?? icoData.ImageReferences.First();
     }
 
     /// <summary>
@@ -117,20 +129,46 @@ public class AniData
     }
 
     /// <summary>
-    /// Returns the index of the <see cref="AnimationInformation"/> with the highest pixel complexity,
-    /// calculated as <c>BitCount * Width * Height</c>.
+    /// Returns the index of the highest quality <see cref="AnimationInformation"/>, scoring pixel area and color
+    /// bit depth relative to the best value present and combining them using the supplied weights.
+    /// <para>
+    /// The weights are a ratio and are normalized internally, so 2 and 1 rank identically to 0.667 and 0.333.
+    /// The default favors size over color depth. Because both terms are relative to the variants of this
+    /// animation, a score is only meaningful within that set.
+    /// </para>
     /// </summary>
-    public int PreferredAnimationIndex()
+    /// <param name="areaWeight">The relative importance of the pixel area.</param>
+    /// <param name="colorBitWeight">The relative importance of the color bit depth.</param>
+    /// <returns>The index of the preferred variant, or -1 if this animation has no variants.</returns>
+    public int PreferredAnimationIndex(double areaWeight = 2, double colorBitWeight = 1)
+        => BestByQuality(Animations, areaWeight, colorBitWeight);
+
+    internal static int BestByQuality(IReadOnlyList<AnimationInformation>? animations, double areaWeight, double colorBitWeight)
     {
-        if (Animations is null || Animations.Count == 0)
+        if (areaWeight < 0)
+            throw new ArgumentOutOfRangeException(nameof(areaWeight), areaWeight, "Weights cannot be negative.");
+        if (colorBitWeight < 0)
+            throw new ArgumentOutOfRangeException(nameof(colorBitWeight), colorBitWeight, "Weights cannot be negative.");
+
+        var weightSum = areaWeight + colorBitWeight;
+        if (weightSum <= 0)
+            throw new ArgumentException("At least one weight must be greater than zero.", nameof(areaWeight));
+
+        if (animations is null || animations.Count == 0)
             return -1;
 
+        var maxArea = animations.Max(a => (long)a.Width * a.Height);
+        var maxBitCount = animations.Max(a => a.BitCount);
+
         var bestIndex = 0;
-        long bestScore = 0;
-        for (var i = 0; i < Animations.Count; i++)
+        var bestScore = double.NegativeInfinity;
+        for (var i = 0; i < animations.Count; i++)
         {
-            var a = Animations[i];
-            long score = (long)a.BitCount * a.Width * a.Height;
+            var animation = animations[i];
+            var areaRatio = maxArea > 0 ? (double)((long)animation.Width * animation.Height) / maxArea : 0;
+            var bitRatio = maxBitCount > 0 ? (double)animation.BitCount / maxBitCount : 0;
+            var score = ((areaWeight * areaRatio) + (colorBitWeight * bitRatio)) / weightSum;
+
             if (score > bestScore)
             {
                 bestScore = score;
@@ -212,12 +250,11 @@ public class AniData
         foreach (var animationInfo in animationInfos)
         {
             var hotspotInfo = new List<FrameHotspot>();
-            var pos = 0;
-            foreach (var ico in _icos)
+            for (var pos = 0; pos < _icos.Length; pos++)
             {
                 try
                 {
-                    var imageReference = FindByAnimationInformation(ico, animationInfo);
+                    var imageReference = FindByAnimationInformation(_icos[pos], animationInfo);
 
                     hotspotInfo.Add(new FrameHotspot()
                     {
@@ -226,7 +263,7 @@ public class AniData
                         HotspotY = imageReference.HotspotY
                     });
                 }
-                catch
+                catch (InvalidOperationException)
                 {
                     hotspotInfo.Add(new FrameHotspot()
                     {
@@ -243,20 +280,31 @@ public class AniData
         Animations = new ReadOnlyCollection<AnimationInformation>(animationInfos);
     }
 
-    private List<AnimationInformation> GetAnimations(IcoData icoData)
+    private static List<AnimationInformation> GetAnimations(IcoData icoData)
     {
         var currentAnimations = icoData.ImageReferences
+            .GroupBy(x => (x.Width, x.Height))
+            .Select(group => group.OrderByDescending(EffectiveBitCount).First())
             .Select(x => new AnimationInformation
             {
-                BitCount = x.BitCount,
+                BitCount = EffectiveBitCount(x),
                 Height = x.Height,
                 Width = x.Width
-                //HotspotsX = x.HotspotX,
-                //HotspotsY = x.HotspotY
             });
 
         return [.. currentAnimations];
     }
+
+    /// <summary>
+    /// The color depth a consumer of this image actually gets.
+    /// <para>
+    /// PNG-compressed entries are reported at their storage depth, which for a palettized image says nothing
+    /// about the artwork it encodes: a two-color cursor stored as a 1-bit palette loses nothing. Icon and
+    /// cursor formats require PNG entries to be 32-bit ARGB, so they are ranked as such.
+    /// </para>
+    /// </summary>
+    private static int EffectiveBitCount(ImageReference imageReference)
+        => imageReference.Format == IcoImageFormat.PNG ? 32 : imageReference.BitCount;
 
     private void CalculateFrames()
     {

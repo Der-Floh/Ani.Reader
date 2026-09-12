@@ -37,8 +37,8 @@
           "hotspotX": 30,
           "hotspotY": 30,
           "encoding": "PNG",
-          "bitCount": null,
-          "reachableAsAnimation": false,
+          "bitCount": 32,
+          "reachableAsAnimation": true,
           "transparentPixelsPerFrame": [ 0, 1013, 0 ]
         }
       ]

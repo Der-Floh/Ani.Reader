@@ -43,6 +43,10 @@ public class AnimationInformation
 
     /// <summary>
     /// The bit depth of the image, indicating the number of bits used for each color component.
+    /// <para>
+    /// Reported by the first frame that contains this variant. A frame may store the same variant at a different
+    /// depth, so this value does not take part in equality.
+    /// </para>
     /// </summary>
     public int BitCount { get; internal set; }
 
@@ -55,6 +59,11 @@ public class AnimationInformation
     /// </summary>
     public IEnumerable<FrameHotspot> FrameHotspots { get; internal set; } = Enumerable.Empty<FrameHotspot>();
 
+    /// <summary>
+    /// Two variants are the same when they describe the same size. Bit depth is a per-frame storage detail:
+    /// an encoder may pick a smaller palette for frames that need fewer colors, and those frames still belong
+    /// to the same animation variant.
+    /// </summary>
     public static bool operator ==(AnimationInformation left, AnimationInformation right)
     {
         if (ReferenceEquals(left, right))
@@ -64,8 +73,7 @@ public class AnimationInformation
             return false;
 
         return left.Width == right.Width &&
-               left.Height == right.Height &&
-               left.BitCount == right.BitCount;
+               left.Height == right.Height;
     }
 
     public static bool operator !=(AnimationInformation left, AnimationInformation right)
@@ -82,5 +90,8 @@ public class AnimationInformation
     }
 
     public override int GetHashCode()
-        => HashCode.Combine(Width, Height, BitCount);
+        => HashCode.Combine(Width, Height);
+
+    public override string ToString()
+        => $"{Width}x{Height}, BitCount: {BitCount}";
 }

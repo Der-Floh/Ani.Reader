@@ -79,35 +79,66 @@ public sealed class AniAnimationTests
     }
 
     /// <summary>
-    /// Every frame carries a 64x64 variant, but <see cref="AniData.Animations"/> drops it: the variants are
-    /// intersected across frames by width/height/bit depth, and Ico.Reader reports a different bit depth for
-    /// the PNG-encoded 64x64 entry on each frame (3 vs 12), so the intersection removes it.
+    /// The 64x64 variant is PNG-encoded and each frame stores it at whatever palette depth that frame needs, so
+    /// the per-frame reported bit depths differ. Variant identity is size-based, so it survives regardless.
     /// </summary>
     [Fact]
-    public void Animations_DropTheVariantWhoseReportedBitDepthVariesPerFrame()
+    public void Animations_KeepTheVariantWhoseReportedBitDepthVariesPerFrame()
     {
         var aniData = Load();
-        var missing = Fixture.Sizes.Single(s => !s.ReachableAsAnimation);
-
-        Assert.All(
-            aniData.Frames,
-            frame => Assert.Contains(frame.VariationDetails, v => v.Width == missing.Width));
-        Assert.DoesNotContain(aniData.Animations, a => a.Width == missing.Width);
 
         var reportedBitDepths = aniData.Frames
-            .Select(f => f.VariationDetails.Single(v => v.Width == missing.Width).BitCount)
+            .Select(f => f.VariationDetails.Single(v => v.Width == 64).BitCount)
             .Distinct();
-        Assert.True(reportedBitDepths.Count() > 1);
+        Assert.True(reportedBitDepths.Count() > 1, "the fixture no longer varies its 64x64 bit depth per frame");
+
+        Assert.Contains(aniData.Animations, a => a.Width == 64);
     }
 
     [Fact]
-    public void PreferredAnimationIndex_PicksTheLargestReachableVariant()
+    public void Animations_ReportOneVariantPerSize()
+    {
+        var aniData = Load();
+
+        Assert.Equal(
+            aniData.Animations.Select(a => (a.Width, a.Height)).Distinct().Count(),
+            aniData.Animations.Count);
+    }
+
+    [Fact]
+    public void Animations_ReportTheDepthTheConsumerReceives()
+    {
+        var aniData = Load();
+
+        Assert.All(aniData.Animations, animation => Assert.Equal(32, animation.BitCount));
+    }
+
+    [Fact]
+    public void PreferredAnimationIndex_PicksTheLargestVariant()
     {
         var aniData = Load();
 
         var preferred = aniData.Animations[aniData.PreferredAnimationIndex()];
 
+        Assert.Equal(64, preferred.Width);
         Assert.Equal(aniData.Animations.Max(a => a.Width), preferred.Width);
+    }
+
+    /// <summary>
+    /// Every variant of this fixture decodes at the same depth, so no weighting can favor a smaller one.
+    /// </summary>
+    [Theory]
+    [InlineData(2, 1)]
+    [InlineData(1, 1)]
+    [InlineData(1, 2)]
+    [InlineData(1, 0)]
+    public void PreferredAnimationIndex_PicksTheLargestVariantUnderAnyWeighting(double areaWeight, double colorBitWeight)
+    {
+        var aniData = Load();
+
+        var preferred = aniData.Animations[aniData.PreferredAnimationIndex(areaWeight, colorBitWeight)];
+
+        Assert.Equal(64, preferred.Width);
     }
 
     [Fact]
@@ -129,15 +160,16 @@ public sealed class AniAnimationTests
         }
     }
 
-    /// <summary>
-    /// The loop that fills FrameHotspots never advances its counter, so every entry reports frame 0.
-    /// </summary>
     [Fact]
-    public void FrameHotspots_AllReportFramePositionZero()
+    public void FrameHotspots_NumberTheFramesInOrder()
     {
         var aniData = Load();
 
         foreach (var animation in aniData.Animations)
-            Assert.All(animation.FrameHotspots, hotspot => Assert.Equal(0, hotspot.FramePosition));
+        {
+            Assert.Equal(
+                Enumerable.Range(0, Fixture.FrameCount),
+                animation.FrameHotspots.Select(hotspot => hotspot.FramePosition));
+        }
     }
 }

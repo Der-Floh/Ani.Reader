@@ -43,6 +43,7 @@ public sealed class GoldenImageTests
     [Theory]
     [InlineData(32)]
     [InlineData(48)]
+    [InlineData(64)]
     public async Task AniWebPExport_MatchesTheGoldenAnimation(int width)
     {
         var aniData = LoadAnimated();

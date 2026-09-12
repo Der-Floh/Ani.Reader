@@ -26,8 +26,8 @@ internal sealed record FixtureSize
     public IcoImageFormat ExpectedFormat =>
         Encoding switch
         {
-            "PNG" => IcoImageFormat.PNG,
-            "BMP" => IcoImageFormat.BMP,
+            "PNG" => IcoImageFormat.Png,
+            "BMP" => IcoImageFormat.Bmp,
             _ => throw new NotSupportedException($"Unknown encoding '{Encoding}'."),
         };
 

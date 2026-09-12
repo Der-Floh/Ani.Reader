@@ -155,6 +155,7 @@ var aniReader = new AniReader(config);
 | `AniDecoder`   | `IAniDecoder`   | Decoder for parsing ANI RIFF data                               |
 | `AniPeDecoder` | `IAniPeDecoder` | Decoder for extracting ANI resources from `.exe` / `.dll` files |
 | `IcoReader`    | `IcoReader`     | ICO reader used to decode individual animation frames           |
+| `IcoExporter`  | `IIcoExporter`  | ICO exporter used to write decoded frames to disk               |
 
 ## Dependency Injection Support
 

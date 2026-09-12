@@ -1,8 +1,8 @@
 using Ani.Reader.Decoder;
 
 using Ico.Reader;
-
-using PeDecoder;
+using Ico.Reader.Export;
+using Ico.Reader.PeDecoder;
 
 namespace Ani.Reader;
 
@@ -19,10 +19,15 @@ public sealed class AniReaderConfiguration
     /// <summary>
     /// Gets or sets the PE decoder used to extract ANI cursor resources from executables and DLLs.
     /// </summary>
-    public IAniPeDecoder AniPeDecoder { get; set; } = new AniPeDecoder(new PeDecoder.PeDecoder(), new AniDecoder());
+    public IAniPeDecoder AniPeDecoder { get; set; } = new AniPeDecoder(new PeFileDecoder(), new AniDecoder());
 
     /// <summary>
     /// Gets or sets the ICO reader used to decode individual animation frames within an ANI file.
     /// </summary>
     public IcoReader IcoReader { get; set; } = new IcoReader();
+
+    /// <summary>
+    /// Gets or sets the ICO exporter used to write decoded animation frames to disk.
+    /// </summary>
+    public IIcoExporter IcoExporter { get; set; } = new IcoExporter();
 }

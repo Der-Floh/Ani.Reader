@@ -3,6 +3,7 @@
 using Ico.Reader;
 using Ico.Reader.Data;
 using Ico.Reader.Data.Source;
+using Ico.Reader.Export;
 
 namespace Ani.Reader.Models;
 /// <summary>
@@ -59,13 +60,15 @@ public class AniData
 
     private IcoData[] _icos = null!;
     private readonly AniEntry _aniEntry;
+    private readonly IIcoExporter _icoExporter;
 
-    internal AniData(AniEntry aniEntry, AniOriginFileType origin, IDataSource dataSource, IcoReader icoReader)
+    internal AniData(AniEntry aniEntry, AniOriginFileType origin, IDataSource dataSource, IcoReader icoReader, IIcoExporter icoExporter)
     {
         Name = aniEntry.Id.ToString();
         Origin = origin;
         DataSource = dataSource;
         Reader = icoReader;
+        _icoExporter = icoExporter ?? throw new ArgumentNullException(nameof(icoExporter));
         _aniEntry = aniEntry ?? throw new ArgumentNullException(nameof(aniEntry));
         CalculateFrames();
         InitializeIcoDatas();
@@ -124,7 +127,7 @@ public class AniData
 
             var imageReference = FindByAnimationInformation(icoData, aniInfo);
             var fileName = Path.Combine(subPath, $"frame_{frame.Position} ({imageReference.Width}x{imageReference.Height} {imageReference.BitCount} bit).png");
-            await icoData.SaveImageAsync(imageReference, fileName);
+            await _icoExporter.SaveImageAsync(icoData, imageReference, fileName);
         }
     }
 
@@ -304,7 +307,7 @@ public class AniData
     /// </para>
     /// </summary>
     private static int EffectiveBitCount(ImageReference imageReference)
-        => imageReference.Format == IcoImageFormat.PNG ? 32 : imageReference.BitCount;
+        => imageReference.Format == IcoImageFormat.Png ? 32 : imageReference.BitCount;
 
     private void CalculateFrames()
     {

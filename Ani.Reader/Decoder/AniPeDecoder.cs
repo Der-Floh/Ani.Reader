@@ -1,7 +1,7 @@
 using Ani.Reader.Models;
 
-using PeDecoder;
-using PeDecoder.Models;
+using Ico.Reader.PeDecoder;
+using Ico.Reader.PeDecoder.Models;
 
 namespace Ani.Reader.Decoder;
 
@@ -43,23 +43,24 @@ public sealed class AniPeDecoder : IAniPeDecoder
                 : AniOriginFileType.Executable
         };
 
-        AddAniCursors(result, resourceDirectory, peHeader, stream);
+        AddAniCursors(result, resourceDirectory, stream);
         return result;
     }
 
     /// <inheritdoc/>
     public bool IsPeFormat(Stream stream) => _peDecoder.IsPeFormat(stream);
 
-    private void AddAniCursors(DecodedAniResult result, ResourceDirectory resourceDirectory, PE_Header peHeader, Stream stream)
+    private void AddAniCursors(DecodedAniResult result, ResourceDirectory resourceDirectory, Stream stream)
     {
         var aniResources = resourceDirectory.GetResources(ResourceType.RT_ANICURSOR.ToString());
-        if (aniResources is null)
+        var resourceSection = resourceDirectory.Section;
+        if (aniResources is null || resourceSection is null)
             return;
 
         for (var i = 0; i < aniResources.Length; i++)
         {
             var resource = aniResources[i];
-            var fileOffset = resource.GetFileOffset(stream, peHeader);
+            var fileOffset = resource.GetFileOffset(resourceSection);
             var entry = _aniDecoder.Read(stream, fileOffset, resource.Size);
             if (entry is null)
                 return;

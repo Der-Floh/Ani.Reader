@@ -1,11 +1,11 @@
 using Ani.Reader.Decoder;
 
 using Ico.Reader;
+using Ico.Reader.Export;
+using Ico.Reader.PeDecoder;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-
-using PeDecoder;
 
 namespace Ani.Reader;
 
@@ -21,7 +21,7 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddAniReader(this IServiceCollection services)
     {
-        services.TryAddSingleton<IPeDecoder, PeDecoder.PeDecoder>();
+        services.TryAddSingleton<IPeDecoder, PeFileDecoder>();
         services.TryAddSingleton<IAniDecoder, AniDecoder>();
         services.TryAddSingleton<IAniPeDecoder, AniPeDecoder>();
 
@@ -31,7 +31,8 @@ public static class ServiceCollectionExtensions
             {
                 AniDecoder = p.GetRequiredService<IAniDecoder>(),
                 AniPeDecoder = p.GetRequiredService<IAniPeDecoder>(),
-                IcoReader = p.GetService<IcoReader>() ?? new IcoReader()
+                IcoReader = p.GetService<IcoReader>() ?? new IcoReader(),
+                IcoExporter = p.GetService<IIcoExporter>() ?? new IcoExporter()
             };
 
             return new AniReader(configuration);

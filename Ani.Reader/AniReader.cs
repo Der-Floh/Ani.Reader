@@ -119,7 +119,7 @@ public sealed class AniReader
         var array = new AniData[decodedAniResult.Entries.Count];
         for (var i = 0; i < decodedAniResult.Entries.Count; i++)
         {
-            array[i] = new AniData(decodedAniResult.Entries[i], decodedAniResult.OriginFileType, dataSource, _configuration.IcoReader);
+            array[i] = new AniData(decodedAniResult.Entries[i], decodedAniResult.OriginFileType, dataSource, _configuration.IcoReader, _configuration.IcoExporter);
             if (decodedAniResult.OriginFileType is AniOriginFileType.Executable or AniOriginFileType.Dll)
             {
                 array[i].Name = $"{name} ({decodedAniResult.Entries[i].Id})";

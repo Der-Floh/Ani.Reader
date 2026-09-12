@@ -11,13 +11,17 @@ public class AniFrameReference
     public long RealOffset { get; set; }
 
     /// <summary>
-    /// The relative offset of the frame within the frame list.
-    /// <para> This offset may differ from <see cref="RealOffset"/> based on how frames are organized. </para>
+    /// The offset of the frame's data within the animation's RIFF data.
+    /// <para>
+    /// Equal to <see cref="RealOffset"/> for a standalone .ani file. For an animation stored in an executable or DLL it
+    /// is counted from the start of the resource instead.
+    /// </para>
     /// </summary>
     public long Offset { get; set; }
 
     /// <summary>
     /// The size of the frame data in bytes.
+    /// <para> Rounded up to an even number, since RIFF pads every chunk to a 2-byte boundary. </para>
     /// </summary>
     public uint Size { get; set; }
 
@@ -32,6 +36,7 @@ public class AniFrameReference
         return new SubStream(sourceStream, RealOffset, Size);
     }
 
+    /// <inheritdoc/>
     public override string ToString()
         => $"Frame at {Offset}, Size: {Size}";
 }

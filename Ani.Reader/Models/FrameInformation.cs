@@ -21,6 +21,10 @@ public class FrameInformation
     /// </summary>
     public TimeSpan Duration { get; set; }
 
+    /// <summary>
+    /// Every image this frame's icon or cursor data holds, with its size, color depth and hotspot.
+    /// <para> Empty when the frame holds no image. </para>
+    /// </summary>
     public IEnumerable<FrameVariationInformation> VariationDetails { get; set; } = Enumerable.Empty<FrameVariationInformation>();
 
     /// <summary>

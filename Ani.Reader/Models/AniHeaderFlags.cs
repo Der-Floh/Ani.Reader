@@ -10,6 +10,10 @@ public class AniHeaderFlags
     /// The IconFlag determines whether the frames contain icon/cursor data or raw image data.
     /// <para> TRUE: Frames contain icon or cursor data. </para>
     /// <para> FALSE: Frames contain raw image data. </para>
+    /// <para>
+    /// Only animations whose frames hold icon or cursor data can be read; <see cref="AniReader"/> rejects a standalone
+    /// .ani file with raw frames.
+    /// </para>
     /// </summary>
     public bool IconFlag { get; set; }
 
@@ -40,6 +44,7 @@ public class AniHeaderFlags
         };
     }
 
+    /// <inheritdoc/>
     public override string ToString()
         => $"IconFlag: {IconFlag}, SequenceFlag: {SequenceFlag}, Reserved: {Reserved}";
 }

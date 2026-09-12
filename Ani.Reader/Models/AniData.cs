@@ -182,6 +182,16 @@ public class AniData
         return bestIndex;
     }
 
+    /// <summary>
+    /// Decodes one frame and returns its image at the given size, encoded as PNG.
+    /// <para> The image is chosen with <see cref="FindByAnimationInformation"/>. </para>
+    /// </summary>
+    /// <param name="aniInfo">The size to take from the frame, one of <see cref="Animations"/>.</param>
+    /// <param name="frame">The frame to decode, one of <see cref="Frames"/>.</param>
+    /// <returns>
+    /// The PNG encoded image, or <see langword="null"/> if the frame's data cannot be read as icon or cursor data or
+    /// holds no image.
+    /// </returns>
     public async Task<byte[]?> GetFrameBytes(AnimationInformation aniInfo, FrameInformation frame)
     {
         var frameChunk = frame.FrameReference.GetFrameStream(DataSource.GetStream());

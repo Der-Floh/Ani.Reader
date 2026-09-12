@@ -5,6 +5,9 @@ using ImageMagick.Formats;
 
 namespace Ani.Reader;
 
+/// <summary>
+/// Encodes an animation as an animated, lossless WebP image.
+/// </summary>
 public static class WebPCreator
 {
     private static readonly TimeSpan MaxFrameDuration = TimeSpan.FromHours(1);
@@ -15,6 +18,21 @@ public static class WebPCreator
         Exact = true,
     };
 
+    /// <summary>
+    /// Writes one size of the animation to an animated WebP file.
+    /// </summary>
+    /// <param name="aniData">The animation to encode.</param>
+    /// <param name="path">
+    /// An existing directory, in which case the file is written to a subdirectory named after <see cref="AniData.Name"/>
+    /// as <c>Name (WidthxHeight BitCount bit).webp</c>; otherwise the path of the file itself. Missing directories are
+    /// created.
+    /// </param>
+    /// <param name="aniInfo">The size to encode, one of <see cref="AniData.Animations"/>.</param>
+    /// <returns>A task that completes once the file has been written.</returns>
+    /// <remarks>
+    /// Frames whose data cannot be read, and frames shown for an hour or longer, are left out. Frame durations are
+    /// rounded to hundredths of a second.
+    /// </remarks>
     public static async Task SaveAsWebP(this AniData aniData, string path, AnimationInformation aniInfo)
     {
         var outputFile = InitializePath(path, aniData, aniInfo);
@@ -22,6 +40,15 @@ public static class WebPCreator
         collection.Write(outputFile, WriteDefines);
     }
 
+    /// <summary>
+    /// Encodes one size of the animation as an animated WebP image in memory.
+    /// </summary>
+    /// <param name="aniData">The animation to encode.</param>
+    /// <param name="aniInfo">The size to encode, one of <see cref="AniData.Animations"/>.</param>
+    /// <returns>The encoded WebP image.</returns>
+    /// <remarks>
+    /// Frames are chosen and timed as described for <see cref="SaveAsWebP"/>.
+    /// </remarks>
     public static async Task<byte[]?> GetWebpBytes(this AniData aniData, AnimationInformation aniInfo)
     {
         using var collection = await CreateCollection(aniData, aniInfo);

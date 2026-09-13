@@ -45,7 +45,12 @@ public class AniData
     public ReadOnlyCollection<FrameInformation> Frames { get; private set; } = null!;
 
     /// <summary>
-    /// A read-only collection of animation sequences.
+    /// The sizes the animation can be played back at, one entry per size.
+    /// <para>
+    /// Lists the sizes every frame holding an image has, ignoring frames without one. When those frames share no size,
+    /// it lists the sizes of the first of them instead, and <see cref="FindByAnimationInformation"/> gives each other
+    /// frame the image closest in size.
+    /// </para>
     /// </summary>
     public ReadOnlyCollection<AnimationInformation> Animations { get; private set; } = null!;
 
@@ -114,10 +119,15 @@ public class AniData
     /// Size takes priority over bit depth: a frame may store the requested size at a different depth than the
     /// variant reports, and returning that image is always better than returning a different size.
     /// </para>
+    /// <para>
+    /// A frame without an image of the requested size gives the image closest to it, counting the difference in width
+    /// plus the difference in height, and the larger of two equally close sizes.
+    /// </para>
     /// </summary>
     /// <param name="icoData">The ICO data containing multiple image references.</param>
     /// <param name="aniInfo">The animation frame information, specifying dimensions and bit depth.</param>
     /// <returns>The best matching <see cref="ImageReference"/> from the ICO data.</returns>
+    /// <exception cref="InvalidOperationException">The ICO data holds no image.</exception>
     public ImageReference FindByAnimationInformation(IcoData icoData, AnimationInformation aniInfo)
     {
         var exactMatch = icoData.ImageReferences.FirstOrDefault(x =>
@@ -125,12 +135,11 @@ public class AniData
         if (exactMatch is not null)
             return exactMatch;
 
-        var sizeMatch = icoData.ImageReferences
-            .Where(x => x.Width == aniInfo.Width && x.Height == aniInfo.Height)
-            .OrderByDescending(EffectiveBitCount)
-            .FirstOrDefault();
-
-        return sizeMatch ?? icoData.ImageReferences.First();
+        return icoData.ImageReferences
+            .OrderBy(x => Math.Abs(x.Width - aniInfo.Width) + Math.Abs(x.Height - aniInfo.Height))
+            .ThenByDescending(x => (long)x.Width * x.Height)
+            .ThenByDescending(EffectiveBitCount)
+            .First();
     }
 
     /// <summary>
@@ -268,33 +277,32 @@ public class AniData
 
     private void InitializeIcoDatas(IReadOnlyList<IcoData?> stepImages)
     {
-        var animationInfos = new List<AnimationInformation>();
-
         for (var i = 0; i < Frames.Count; i++)
         {
             var icoData = stepImages[i];
             if (icoData is not null && icoData.ImageReferences.Count > 0)
                 Frames[i].VariationDetails = icoData.ImageReferences.Select(ToVariation).ToList();
-
-            var currentAnimations = GetAnimations(icoData);
-            if (animationInfos.Count == 0)
-            {
-                animationInfos.AddRange(currentAnimations);
-            }
-            else
-            {
-                for (var aniIndex = animationInfos.Count - 1; aniIndex >= 0; aniIndex--)
-                {
-                    if (!currentAnimations.Contains(animationInfos[aniIndex]))
-                        animationInfos.RemoveAt(aniIndex);
-                }
-            }
         }
 
+        var animationInfos = SharedSizes(stepImages);
         foreach (var animationInfo in animationInfos)
             animationInfo.FrameHotspots = stepImages.Select((icoData, position) => HotspotOf(icoData, animationInfo, position)).ToList();
 
         Animations = new ReadOnlyCollection<AnimationInformation>(animationInfos);
+    }
+
+    private static List<AnimationInformation> SharedSizes(IEnumerable<IcoData?> stepImages)
+    {
+        var framesWithImages = stepImages.OfType<IcoData>().Where(icoData => icoData.ImageReferences.Count > 0).ToList();
+        if (framesWithImages.Count == 0)
+            return [];
+
+        var firstFrameSizes = GetAnimations(framesWithImages[0]);
+        var sharedSizes = firstFrameSizes
+            .Where(size => framesWithImages.All(icoData => icoData.ImageReferences.Any(image => image.Width == size.Width && image.Height == size.Height)))
+            .ToList();
+
+        return sharedSizes.Count > 0 ? sharedSizes : firstFrameSizes;
     }
 
     private static FrameVariationInformation ToVariation(ImageReference image) => new()
@@ -320,11 +328,8 @@ public class AniData
         };
     }
 
-    private static List<AnimationInformation> GetAnimations(IcoData? icoData)
+    private static List<AnimationInformation> GetAnimations(IcoData icoData)
     {
-        if (icoData is null)
-            return [];
-
         var currentAnimations = icoData.ImageReferences
             .GroupBy(x => (x.Width, x.Height))
             .Select(group => group.OrderByDescending(EffectiveBitCount).First())

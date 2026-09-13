@@ -52,8 +52,9 @@ public class FrameVariationInformation : HotspotInformation
 }
 
 /// <summary>
-/// One size the whole animation is available in: every frame holds an image of this size, so the animation can be
-/// played back at it.
+/// One size the whole animation is available in: every frame that holds an image has one of this size, so the animation
+/// can be played back at it. When the frames share no size, <see cref="AniData.Animations"/> lists the sizes of the
+/// first frame with an image, and the other frames give the image closest in size.
 /// <para>
 /// Pass it to <see cref="AniData.GetFrameBytes"/>, <see cref="AniData.SaveImages"/> or <see cref="WebPCreator"/> to take
 /// that image from each frame. <see cref="AniData.PreferredAnimationIndex"/> picks the best of them.

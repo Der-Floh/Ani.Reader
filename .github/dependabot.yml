@@ -18,6 +18,9 @@ updates:
       interval: weekly
     commit-message:
       prefix: deps
+    ignore:
+      - dependency-name: Microsoft.Extensions.DependencyInjection
+      - dependency-name: Microsoft.Extensions.DependencyInjection.Abstractions
     groups:
       microsoft:
         patterns:

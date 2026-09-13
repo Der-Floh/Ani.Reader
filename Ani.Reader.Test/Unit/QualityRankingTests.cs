@@ -22,13 +22,22 @@ public sealed class QualityRankingTests
     [Fact]
     public void FavoringArea_PicksTheLargerVariant()
     {
-        Assert.Equal(0, AniData.BestByQuality(BigShallowVersusSmallDeep, areaWeight: 4, colorBitWeight: 1));
+        Assert.Equal(0, AniData.BestByQuality(BigShallowVersusSmallDeep, colorBitWeight: 1, areaWeight: 4));
     }
 
     [Fact]
     public void FavoringColorDepth_PicksTheDeeperVariant()
     {
-        Assert.Equal(1, AniData.BestByQuality(BigShallowVersusSmallDeep, areaWeight: 1, colorBitWeight: 4));
+        Assert.Equal(1, AniData.BestByQuality(BigShallowVersusSmallDeep, colorBitWeight: 4, areaWeight: 1));
+    }
+
+    /// <summary>
+    /// The weights come in the order <see cref="Ico.Reader.Data.IcoData.PreferredImageIndex(float, float)"/> takes them.
+    /// </summary>
+    [Fact]
+    public void PositionalWeights_TakeTheColorBitWeightFirst()
+    {
+        Assert.Equal(1, AniData.BestByQuality(BigShallowVersusSmallDeep, 4f, 1f));
     }
 
     /// <summary>
@@ -36,14 +45,14 @@ public sealed class QualityRankingTests
     /// implementation multiplied the whole product by the weight, which could never reorder anything.
     /// </summary>
     [Theory]
-    [InlineData(2, 1)]
-    [InlineData(20, 10)]
-    [InlineData(0.667, 0.333)]
-    public void EquivalentWeightRatios_RankIdentically(double areaWeight, double colorBitWeight)
+    [InlineData(1f, 2f)]
+    [InlineData(10f, 20f)]
+    [InlineData(0.333f, 0.667f)]
+    public void EquivalentWeightRatios_RankIdentically(float colorBitWeight, float areaWeight)
     {
-        var expected = AniData.BestByQuality(BigShallowVersusSmallDeep, 2, 1);
+        var expected = AniData.BestByQuality(BigShallowVersusSmallDeep, colorBitWeight: 1, areaWeight: 2);
 
-        Assert.Equal(expected, AniData.BestByQuality(BigShallowVersusSmallDeep, areaWeight, colorBitWeight));
+        Assert.Equal(expected, AniData.BestByQuality(BigShallowVersusSmallDeep, colorBitWeight, areaWeight));
     }
 
     [Fact]
@@ -51,7 +60,7 @@ public sealed class QualityRankingTests
     {
         AnimationInformation[] variants = [Variant(32, 32), Variant(64, 1)];
 
-        Assert.Equal(1, AniData.BestByQuality(variants, areaWeight: 1, colorBitWeight: 0));
+        Assert.Equal(1, AniData.BestByQuality(variants, colorBitWeight: 0, areaWeight: 1));
     }
 
     [Fact]
@@ -59,7 +68,7 @@ public sealed class QualityRankingTests
     {
         AnimationInformation[] variants = [Variant(32, 32), Variant(64, 1)];
 
-        Assert.Equal(0, AniData.BestByQuality(variants, areaWeight: 0, colorBitWeight: 1));
+        Assert.Equal(0, AniData.BestByQuality(variants, colorBitWeight: 1, areaWeight: 0));
     }
 
     [Fact]
@@ -67,14 +76,14 @@ public sealed class QualityRankingTests
     {
         AnimationInformation[] variants = [Variant(32, 32), Variant(32, 32)];
 
-        Assert.Equal(0, AniData.BestByQuality(variants, 2, 1));
+        Assert.Equal(0, AniData.BestByQuality(variants, colorBitWeight: 1, areaWeight: 2));
     }
 
     [Fact]
     public void NoVariants_ReturnsMinusOne()
     {
-        Assert.Equal(-1, AniData.BestByQuality([], 2, 1));
-        Assert.Equal(-1, AniData.BestByQuality(null, 2, 1));
+        Assert.Equal(-1, AniData.BestByQuality([], colorBitWeight: 1, areaWeight: 2));
+        Assert.Equal(-1, AniData.BestByQuality(null, colorBitWeight: 1, areaWeight: 2));
     }
 
     [Fact]
@@ -82,16 +91,16 @@ public sealed class QualityRankingTests
     {
         AnimationInformation[] variants = [Variant(32, 0), Variant(64, 0)];
 
-        Assert.Equal(1, AniData.BestByQuality(variants, 2, 1));
+        Assert.Equal(1, AniData.BestByQuality(variants, colorBitWeight: 1, areaWeight: 2));
     }
 
     [Theory]
-    [InlineData(-1, 1)]
-    [InlineData(1, -1)]
-    public void NegativeWeights_Throw(double areaWeight, double colorBitWeight)
+    [InlineData(-1f, 1f)]
+    [InlineData(1f, -1f)]
+    public void NegativeWeights_Throw(float colorBitWeight, float areaWeight)
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => AniData.BestByQuality(BigShallowVersusSmallDeep, areaWeight, colorBitWeight));
+            () => AniData.BestByQuality(BigShallowVersusSmallDeep, colorBitWeight, areaWeight));
     }
 
     [Fact]

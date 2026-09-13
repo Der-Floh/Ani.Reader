@@ -186,23 +186,26 @@ public class AniData
     /// <para>
     /// The weights are a ratio and are normalized internally, so 2 and 1 rank identically to 0.667 and 0.333.
     /// The default favors size over color depth. Because both terms are relative to the variants of this
-    /// animation, a score is only meaningful within that set.
+    /// animation, a score is only meaningful within that set. The weights are the same, in the same order, as for
+    /// <see cref="IcoData.PreferredImageIndex(float, float)"/>.
     /// </para>
     /// </summary>
-    /// <param name="areaWeight">The relative importance of the pixel area.</param>
     /// <param name="colorBitWeight">The relative importance of the color bit depth.</param>
+    /// <param name="areaWeight">The relative importance of the pixel area.</param>
     /// <returns>The index of the preferred variant, or -1 if this animation has no variants.</returns>
-    public int PreferredAnimationIndex(double areaWeight = 2, double colorBitWeight = 1)
-        => BestByQuality(Animations, areaWeight, colorBitWeight);
+    /// <exception cref="ArgumentOutOfRangeException">A weight is negative.</exception>
+    /// <exception cref="ArgumentException">Both weights are zero.</exception>
+    public int PreferredAnimationIndex(float colorBitWeight = 1f, float areaWeight = 2f)
+        => BestByQuality(Animations, colorBitWeight, areaWeight);
 
-    internal static int BestByQuality(IReadOnlyList<AnimationInformation>? animations, double areaWeight, double colorBitWeight)
+    internal static int BestByQuality(IReadOnlyList<AnimationInformation>? animations, float colorBitWeight, float areaWeight)
     {
-        if (areaWeight < 0)
-            throw new ArgumentOutOfRangeException(nameof(areaWeight), areaWeight, "Weights cannot be negative.");
         if (colorBitWeight < 0)
             throw new ArgumentOutOfRangeException(nameof(colorBitWeight), colorBitWeight, "Weights cannot be negative.");
+        if (areaWeight < 0)
+            throw new ArgumentOutOfRangeException(nameof(areaWeight), areaWeight, "Weights cannot be negative.");
 
-        var weightSum = areaWeight + colorBitWeight;
+        var weightSum = colorBitWeight + areaWeight;
         if (weightSum <= 0)
             throw new ArgumentException("At least one weight must be greater than zero.", nameof(areaWeight));
 

@@ -128,15 +128,15 @@ public sealed class AniAnimationTests
     /// Every variant of this fixture decodes at the same depth, so no weighting can favor a smaller one.
     /// </summary>
     [Theory]
-    [InlineData(2, 1)]
-    [InlineData(1, 1)]
-    [InlineData(1, 2)]
-    [InlineData(1, 0)]
-    public void PreferredAnimationIndex_PicksTheLargestVariantUnderAnyWeighting(double areaWeight, double colorBitWeight)
+    [InlineData(1f, 2f)]
+    [InlineData(1f, 1f)]
+    [InlineData(2f, 1f)]
+    [InlineData(0f, 1f)]
+    public void PreferredAnimationIndex_PicksTheLargestVariantUnderAnyWeighting(float colorBitWeight, float areaWeight)
     {
         var aniData = Load();
 
-        var preferred = aniData.Animations[aniData.PreferredAnimationIndex(areaWeight, colorBitWeight)];
+        var preferred = aniData.Animations[aniData.PreferredAnimationIndex(colorBitWeight, areaWeight)];
 
         Assert.Equal(64, preferred.Width);
     }

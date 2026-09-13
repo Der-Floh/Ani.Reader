@@ -19,6 +19,7 @@ dotnet add package Ani.Reader
 - **Supports ANI Files and PE Resources**: Reads animated cursors from standalone `.ani` files as well as embedded resources within executables and DLLs.
 - **Efficient Memory Usage**: Implements lazy frame loading — individual frame image data is not decoded until it is needed.
 - **Multiple Animation Variants**: A single ANI source can contain variants at different sizes and bit depths, each accessible as a separate `AnimationInformation`.
+- **Windows-Exact Playback**: Animations Windows loads play exactly the steps Windows plays, and `LoadsOnWindows` tells whether Windows accepts an animation at all.
 - **Flexible Data Access**: Supports reading from file paths, byte arrays, and streams.
 - **WebP Export**: Animated cursors can be exported as animated WebP images via the built-in `WebPCreator` extension.
 
@@ -57,7 +58,7 @@ using (var streamOrigin = File.OpenRead("path/to/cursor.ani"))
 
 Both modes read from the stream's **current position**, so an animation that follows other data in a stream can be read by positioning the stream at its start first.
 
-> **Note:** All `Read()` overloads return `null` if the file does not exist, the format is unrecognised, or the data cannot be parsed.
+> **Note:** All `Read()` overloads return `null` if the file does not exist, the format is unrecognised, or the data cannot be parsed. Animations whose frames are raw bitmaps rather than icons or cursors, and animations in which no frame holds an image, are left out: an `.ani` file of that kind returns `null`, and an executable or DLL returns the animations that remain, or an empty array when it holds none.
 
 ### Working with AniData
 
@@ -69,32 +70,35 @@ Both modes read from the stream's **current position**, so an animation that fol
 | ------------------------ | ------------------------------------------ | ------------------------------------------------ |
 | `Name`                   | `string`                                   | Derived from the file name or PE resource ID     |
 | `Origin`                 | `AniOriginFileType`                        | `Executable`, `Dll`, or `Ani`                    |
-| `TotalAnimationDuration` | `TimeSpan`                                 | Sum of all frame durations                       |
+| `TotalAnimationDuration` | `TimeSpan`                                 | Sum of all step durations                        |
 | `TotalFrames`            | `int`                                      | Number of steps in `Frames`                      |
 | `FrameRate`              | `float`                                    | Frames per second (`60 / DisplayRate`)           |
 | `Frames`                 | `ReadOnlyCollection<FrameInformation>`     | Ordered sequence of frame steps including timing |
-| `Animations`             | `ReadOnlyCollection<AnimationInformation>` | Available size and bit-depth variants            |
+| `Animations`             | `ReadOnlyCollection<AnimationInformation>` | Sizes the animation can be played back at        |
 | `LoadsOnWindows`         | `bool`                                     | Whether Windows loads this animation             |
 
 An animation Windows loads plays exactly the steps Windows plays. One Windows refuses, such as a file whose `seq` chunk does not match its header, is still read as far as it can be, and `LoadsOnWindows` is `false`. The XML documentation of `LoadsOnWindows` lists the rules.
 
 #### FrameInformation Properties
 
-| Property         | Type                | Description                                       |
-| ---------------- | ------------------- | ------------------------------------------------- |
-| `Position`       | `int`               | Index of this step in the animation sequence      |
-| `Start`          | `TimeSpan`          | Time offset when this frame begins                |
-| `Duration`       | `TimeSpan`          | How long this frame is displayed                  |
-| `FrameReference` | `AniFrameReference` | Raw byte offset and size within the source stream |
+| Property           | Type                                     | Description                                               |
+| ------------------ | ---------------------------------------- | --------------------------------------------------------- |
+| `Position`         | `int`                                    | Index of this step in the animation sequence              |
+| `Start`            | `TimeSpan`                               | Time offset when this step begins                         |
+| `Duration`         | `TimeSpan`                               | How long this step is displayed                           |
+| `VariationDetails` | `IEnumerable<FrameVariationInformation>` | Every image the step's frame holds, with size and hotspot |
+| `FrameReference`   | `AniFrameReference`                      | Raw byte offset and size within the source stream         |
 
 #### AnimationInformation Properties
 
-| Property        | Type                 | Description                            |
-| --------------- | -------------------- | -------------------------------------- |
-| `Width`         | `int`                | Frame width in pixels                  |
-| `Height`        | `int`                | Frame height in pixels                 |
-| `BitCount`      | `int`                | Bit depth (e.g. 1, 4, 8, 24, 32)       |
-| `FrameHotspots` | `List<FrameHotspot>` | Cursor hotspot position per frame step |
+| Property        | Type                        | Description                              |
+| --------------- | --------------------------- | ---------------------------------------- |
+| `Width`         | `int`                       | Frame width in pixels                    |
+| `Height`        | `int`                       | Frame height in pixels                   |
+| `BitCount`      | `int`                       | Bit depth, counting PNG images as 32-bit |
+| `FrameHotspots` | `IEnumerable<FrameHotspot>` | Cursor hotspot position per frame step   |
+
+`Animations` holds one entry per size that every frame with an image has. When the frames share no size, it holds the sizes of the first frame with an image instead, and each other frame gives the image closest in size.
 
 ### Retrieving Frame Data
 
@@ -105,18 +109,21 @@ foreach (var aniData in aniDatas)
 {
     var animation = aniData.Animations[0];
 
-    // Get the decoded PNG bytes for a single frame
+    // Get the decoded PNG bytes for a single frame, or null when the step's frame holds no readable image
     byte[]? frameBytes = await aniData.GetFrameBytes(animation, aniData.Frames[0]);
 }
 ```
 
 ### Selecting the Preferred Animation Variant
 
-`AniData.PreferredAnimationIndex()` returns the index of the `AnimationInformation` with the highest quality score, calculated as `BitCount × Width × Height`.
+`AniData.PreferredAnimationIndex()` returns the index of the `AnimationInformation` with the highest quality score. Each variant scores its pixel area and its bit depth, both relative to the largest in the animation, weighted by `areaWeight` (2 by default) and `colorBitWeight` (1 by default). The weights work as for Ico.Reader's `PreferredImageIndex`.
 
 ```cs
 int preferredIndex = aniData.PreferredAnimationIndex();
 var animation = aniData.Animations[preferredIndex];
+
+// Favor color depth over size
+int deepestIndex = aniData.PreferredAnimationIndex(colorBitWeight: 2f, areaWeight: 1f);
 ```
 
 ### Saving / Exporting
@@ -137,6 +144,8 @@ await aniData.SaveAsWebP("output/cursor.webp", animation);
 // Get the animated WebP as a byte array
 byte[] webpBytes = await aniData.GetWebpBytes(animation);
 ```
+
+Steps shown for an hour or longer are left out of the WebP. When that leaves no step, the first frame with an image is written as a still image.
 
 ## Configuration
 
@@ -179,4 +188,4 @@ public void ConfigureServices(IServiceCollection services)
 
 - [Ico.Reader](https://www.nuget.org/packages/Ico.Reader/)
 - [Magick.NET-Q16-AnyCPU](https://www.nuget.org/packages/Magick.NET-Q16-AnyCPU/) *(WebP export only)*
-- [Microsoft.Extensions.DependencyInjection.Abstractions](https://www.nuget.org/packages/Microsoft.Extensions.DependencyInjection.Abstractions/)
+- [Microsoft.Extensions.DependencyInjection.Abstractions](https://www.nuget.org/packages/Microsoft.Extensions.DependencyInjection.Abstractions/) *(2.1.0 or later)*

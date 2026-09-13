@@ -30,7 +30,7 @@ public sealed class AniAnimationTests
 
         Assert.All(aniData.Frames, frame => Assert.Equal(Fixture.FrameDuration, frame.Duration));
         Assert.Equal(
-            Enumerable.Range(0, Fixture.FrameCount).Select(i => Fixture.FrameDuration * i),
+            Enumerable.Range(0, Fixture.FrameCount).Select(i => TimeSpan.FromTicks(Fixture.FrameDuration.Ticks * i)),
             aniData.Frames.Select(f => f.Start));
     }
 
@@ -39,7 +39,7 @@ public sealed class AniAnimationTests
     {
         var aniData = Load();
 
-        Assert.Equal(Fixture.FrameDuration * Fixture.FrameCount, aniData.TotalAnimationDuration);
+        Assert.Equal(TimeSpan.FromTicks(Fixture.FrameDuration.Ticks * Fixture.FrameCount), aniData.TotalAnimationDuration);
     }
 
     [Fact]

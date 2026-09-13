@@ -73,7 +73,7 @@ public sealed class GoldenImageTests
         foreach (var size in fixture.Sizes)
         {
             var reference = icoData.ImageReferences.Single(r => r.Width == size.Width);
-            var png = await icoData.GetImageAsync(reference);
+            var png = await icoData.GetImageAsync(reference, TestContext.Current.CancellationToken);
 
             Golden.VerifyImage(
                 Path.Combine("cur", Path.GetFileNameWithoutExtension(fileName), $"{size.Width}x{size.Height}.png"),

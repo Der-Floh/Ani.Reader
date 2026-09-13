@@ -18,10 +18,12 @@ public sealed class AniPeDecoderTests
 {
     private static readonly byte[] Fixture = TestFiles.BytesOf(TestFiles.AnimatedThreeFrame);
 
+    private static readonly byte[] CutShortFixture = [.. Fixture.Take(40)];
+
     [Fact]
     public void GetDecodedAniResult_SkipsAnUnreadableResourceAndKeepsTheRest()
     {
-        var image = new FakePeImage(Fixture, Fixture[..40], Fixture);
+        var image = new FakePeImage(Fixture, CutShortFixture, Fixture);
         using var stream = new MemoryStream(image.Bytes);
 
         var result = new AniPeDecoder(image, new AniDecoder()).GetDecodedAniResult(stream);
@@ -73,7 +75,7 @@ public sealed class AniPeDecoderTests
     [Fact]
     public void Read_ReturnsEveryReadableAnimationOfTheDll()
     {
-        var image = new FakePeImage(Fixture, Fixture[..40], Fixture);
+        var image = new FakePeImage(Fixture, CutShortFixture, Fixture);
         var configuration = new AniReaderConfiguration { AniPeDecoder = new AniPeDecoder(image, new AniDecoder()) };
 
         var animations = new AniReader(configuration).Read(image.Bytes);
@@ -116,7 +118,8 @@ public sealed class AniPeDecoderTests
         public FakePeImage(params byte[][] resources)
         {
             using var bytes = new MemoryStream();
-            bytes.Write([(byte)'M', (byte)'Z']);
+            bytes.WriteByte((byte)'M');
+            bytes.WriteByte((byte)'Z');
             bytes.SetLength(StubSize);
             bytes.Position = StubSize;
 
@@ -131,7 +134,7 @@ public sealed class AniPeDecoderTests
                     Level = 3,
                     DataEntries = [new ResourceDataEntry { ID = id, DataRVA = SectionAddress + (uint)bytes.Position, Size = (uint)resources[i].Length }],
                 });
-                bytes.Write(resources[i]);
+                bytes.Write(resources[i], 0, resources[i].Length);
             }
 
             Bytes = bytes.ToArray();

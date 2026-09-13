@@ -75,7 +75,7 @@ public sealed class CursorFileTests
         foreach (var size in fixture.Sizes)
         {
             var reference = icoData.ImageReferences.Single(r => r.Width == size.Width);
-            using var image = Pixels.Decode(await icoData.GetImageAsync(reference));
+            using var image = Pixels.Decode(await icoData.GetImageAsync(reference, TestContext.Current.CancellationToken));
 
             Assert.Equal(size.Width, (int)image.Width);
             Assert.Equal(size.Height, (int)image.Height);
@@ -102,7 +102,7 @@ public sealed class CursorFileTests
         foreach (var size in fixture.Sizes)
         {
             var reference = icoData.ImageReferences.Single(r => r.Width == size.Width);
-            using var image = Pixels.Decode(await icoData.GetImageAsync(reference));
+            using var image = Pixels.Decode(await icoData.GetImageAsync(reference, TestContext.Current.CancellationToken));
 
             Assert.Equal(0, (int)Pixels.Center(image).A);
         }
@@ -119,7 +119,7 @@ public sealed class CursorFileTests
         foreach (var size in fixture.Sizes)
         {
             var reference = icoData.ImageReferences.Single(r => r.Width == size.Width);
-            using var image = Pixels.Decode(await icoData.GetImageAsync(reference));
+            using var image = Pixels.Decode(await icoData.GetImageAsync(reference, TestContext.Current.CancellationToken));
 
             Assert.Equal(0, Pixels.CountTransparent(image));
             Assert.Equal(size.Width * size.Height, Pixels.CountOpaque(image));

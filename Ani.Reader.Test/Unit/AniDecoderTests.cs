@@ -257,7 +257,7 @@ public sealed class AniDecoderTests
     [Fact]
     public void Read_TruncatedFile_ReturnsNull()
     {
-        var bytes = TestFiles.BytesOf(TestFiles.AnimatedThreeFrame)[..40];
+        var bytes = TestFiles.BytesOf(TestFiles.AnimatedThreeFrame).Take(40).ToArray();
         using var stream = new MemoryStream(bytes);
 
         Assert.Null(new AniDecoder().Read(stream));

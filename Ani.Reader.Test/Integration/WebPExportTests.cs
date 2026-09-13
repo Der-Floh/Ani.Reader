@@ -152,7 +152,7 @@ public sealed class WebPExportTests
         var aniData = Load();
         using var directory = new TemporaryDirectory();
         var target = directory.Combine("cursor.webp");
-        await File.WriteAllBytesAsync(target, [0], TestContext.Current.CancellationToken);
+        await AsyncFile.WriteAllBytesAsync(target, [0], TestContext.Current.CancellationToken);
 
         await aniData.SaveAsWebP(target, aniData.Animations[0]);
 
@@ -184,7 +184,7 @@ public sealed class WebPExportTests
 
         Assert.Equal(
             await aniData.GetWebpBytes(animation),
-            await File.ReadAllBytesAsync(target, TestContext.Current.CancellationToken));
+            await AsyncFile.ReadAllBytesAsync(target, TestContext.Current.CancellationToken));
     }
 
     [Fact]

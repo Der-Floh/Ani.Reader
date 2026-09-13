@@ -17,7 +17,7 @@ public sealed class SubStreamTests
         var read = stream.Read(buffer, 0, buffer.Length);
 
         Assert.Equal(4, read);
-        Assert.Equal<byte[]>([3, 4, 5, 6], buffer[..read]);
+        Assert.Equal([3, 4, 5, 6], buffer.Take(read));
     }
 
     [Fact]

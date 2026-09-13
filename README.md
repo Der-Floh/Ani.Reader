@@ -135,7 +135,7 @@ await aniData.SaveImages("output/", animation);
 await aniData.SaveAsWebP("output/cursor.webp", animation);
 
 // Get the animated WebP as a byte array
-byte[]? webpBytes = await aniData.GetWebpBytes(animation);
+byte[] webpBytes = await aniData.GetWebpBytes(animation);
 ```
 
 ## Configuration

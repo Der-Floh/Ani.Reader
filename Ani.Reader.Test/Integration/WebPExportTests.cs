@@ -196,6 +196,34 @@ public sealed class WebPExportTests
     }
 
     [Fact]
+    public async Task GetWebpBytes_EncodesTheFirstFrameAsAStillImageWhenEveryStepLastsAnHourOrMore()
+    {
+        var aniData = Read(AniBuilder.FromFixture().WithRates(216000, 216000, 216000));
+        var animation = aniData.Animations[0];
+
+        var bytes = await aniData.GetWebpBytes(animation);
+
+        using var collection = new MagickImageCollection(bytes);
+        var still = Assert.Single(collection);
+        using var firstFrame = Pixels.Decode((await aniData.GetFrameBytes(animation, aniData.Frames[0]))!);
+        Assert.Equal(0, Pixels.RootMeanSquaredError(still, firstFrame));
+    }
+
+    [Fact]
+    public async Task SaveAsWebP_WritesAStillImageWhenEveryStepLastsAnHourOrMore()
+    {
+        var aniData = Read(AniBuilder.FromFixture().WithRates(216000, 216000, 216000));
+        using var directory = new TemporaryDirectory();
+        var target = directory.Combine("cursor.webp");
+
+        await aniData.SaveAsWebP(target, aniData.Animations[0]);
+
+        Assert.True(File.Exists(target));
+        using var collection = new MagickImageCollection(target);
+        Assert.Single(collection);
+    }
+
+    [Fact]
     public async Task GetWebpBytes_GivesTheTimeOfAFrameWithoutAnImageToTheFrameBeforeIt()
     {
         var aniData = Read(new AniBuilder()

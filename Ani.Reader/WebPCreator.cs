@@ -33,7 +33,7 @@ public static class WebPCreator
     /// Frames shown for an hour or longer are left out together with their time. A frame whose data cannot be read
     /// or holds no image is left out too, but its time goes to the frame before it, or to the frame after it when it
     /// comes first, so the remaining frames keep their place in the animation. Frame durations are rounded to
-    /// hundredths of a second.
+    /// hundredths of a second. When no frame remains, the first frame that holds an image is written as a still image.
     /// </remarks>
     public static async Task SaveAsWebP(this AniData aniData, string path, AnimationInformation aniInfo)
     {
@@ -51,7 +51,7 @@ public static class WebPCreator
     /// <remarks>
     /// Frames are chosen and timed as described for <see cref="SaveAsWebP"/>.
     /// </remarks>
-    public static async Task<byte[]?> GetWebpBytes(this AniData aniData, AnimationInformation aniInfo)
+    public static async Task<byte[]> GetWebpBytes(this AniData aniData, AnimationInformation aniInfo)
     {
         using var collection = await CreateCollection(aniData, aniInfo);
         using var memoryStream = new MemoryStream();
@@ -102,7 +102,21 @@ public static class WebPCreator
             carriedDuration = TimeSpan.Zero;
         }
 
+        if (shownFrames.Count == 0 && await FirstImage(aniData, aniInfo) is { } stillImage)
+            shownFrames.Add(new ShownFrame(stillImage, TimeSpan.Zero));
+
         return shownFrames;
+    }
+
+    private static async Task<byte[]?> FirstImage(AniData aniData, AnimationInformation aniInfo)
+    {
+        foreach (var frame in aniData.Frames)
+        {
+            if (await aniData.GetFrameBytes(aniInfo, frame) is { } pngData)
+                return pngData;
+        }
+
+        return null;
     }
 
     // AnimationDelay counts hundredths of a second at Magick.NET's default AnimationTicksPerSecond.

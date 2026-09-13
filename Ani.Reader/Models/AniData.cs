@@ -333,7 +333,7 @@ public class AniData
         for (var i = 0; i < frameSequence.Count; i++)
         {
             var frameIndex = (int)frameSequence[i];
-            var frameDuration = (_aniEntry.FrameRates.Count > frameIndex) ? _aniEntry.FrameRates[frameIndex] : _aniEntry.Header.DisplayRate;
+            var frameDuration = i < _aniEntry.FrameRates.Count ? _aniEntry.FrameRates[i] : _aniEntry.Header.DisplayRate;
             var duration = TimeSpan.FromSeconds(frameDuration / 60.0);
 
             frameList.Add(new FrameInformation

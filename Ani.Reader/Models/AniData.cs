@@ -160,8 +160,7 @@ public class AniData
             if (!Directory.Exists(subPath))
                 Directory.CreateDirectory(subPath);
 
-            var frameChunk = frame.FrameReference.GetFrameStream(DataSource.GetStream());
-            var icoData = Reader.Read(frameChunk);
+            var icoData = ReadFrameImage(frame.FrameReference);
             if (icoData is null)
                 continue;
 
@@ -244,8 +243,7 @@ public class AniData
     /// </returns>
     public async Task<byte[]?> GetFrameBytes(AnimationInformation aniInfo, FrameInformation frame)
     {
-        var frameChunk = frame.FrameReference.GetFrameStream(DataSource.GetStream());
-        var icoData = Reader.Read(frameChunk);
+        var icoData = ReadFrameImage(frame.FrameReference);
         if (icoData is null)
             return null;
 

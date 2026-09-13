@@ -14,6 +14,24 @@ public sealed class AniFrameImageTests
         new AniReader().Read(Fixture.Path)?[0]
             ?? throw new InvalidOperationException($"{Fixture.FileName} failed to read.");
 
+    [Fact]
+    public async Task ExtractingEveryFrame_LeavesNoHandleOpenOnTheFile()
+    {
+        using var directory = new TemporaryDirectory();
+        var path = directory.Combine(Fixture.FileName);
+        File.Copy(Fixture.Path, path);
+
+        var aniData = Assert.Single(new AniReader().Read(path)!);
+        var animation = aniData.Animations[0];
+        foreach (var frame in aniData.Frames)
+            await aniData.GetFrameBytes(animation, frame);
+
+        await aniData.SaveImages(directory.Combine("frames"), animation);
+        await aniData.GetWebpBytes(animation);
+
+        Assert.Null(Record.Exception(() => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None).Dispose()));
+    }
+
     [Theory]
     [InlineData(32)]
     [InlineData(48)]

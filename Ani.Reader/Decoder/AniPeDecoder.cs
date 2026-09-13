@@ -63,7 +63,7 @@ public sealed class AniPeDecoder : IAniPeDecoder
             var fileOffset = resource.GetFileOffset(resourceSection);
             var entry = _aniDecoder.Read(stream, fileOffset, resource.Size);
             if (entry is null)
-                return;
+                continue;
 
             entry.Id = (int)resource.ID;
             result.Entries.Add(entry);

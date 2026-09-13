@@ -9,6 +9,10 @@ public sealed class AniEntry
     /// Text from the RIFF <c>LIST INFO</c> chunk, keyed by sub-chunk identifier, such as <c>INAM</c> for the title
     /// and <c>IART</c> for the author.
     /// <para> Empty when the file carries no <c>INFO</c> list. </para>
+    /// <para>
+    /// An identifier that repeats keeps its first value, and reading stops at an entry that runs past the end of the
+    /// list. Neither affects the rest of the animation.
+    /// </para>
     /// </summary>
     public Dictionary<string, string> MetaData { get; set; } = [];
 
@@ -32,7 +36,9 @@ public sealed class AniEntry
     public List<uint> FrameSequence { get; set; } = [];
 
     /// <summary>
-    /// References to the frame images in the <c>LIST fram</c> chunk, in the order they are stored.
+    /// References to the frame images, one per <c>icon</c> chunk in the <c>LIST fram</c> chunk, in the order they are
+    /// stored.
+    /// <para> Other chunks inside the list are skipped. </para>
     /// </summary>
     public List<AniFrameReference> Frames { get; set; } = [];
 

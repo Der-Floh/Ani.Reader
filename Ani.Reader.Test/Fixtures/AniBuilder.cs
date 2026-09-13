@@ -16,7 +16,6 @@ internal sealed class AniBuilder
     private readonly List<byte[]> _frames = [];
     private readonly List<long> _frameOffsets = [];
     private readonly List<byte[]> _chunksBeforeHeader = [];
-    private readonly List<byte[]> _extraFrameListChunks = [];
     private uint[]? _rates;
     private uint[]? _sequence;
     private uint? _frameCount;
@@ -100,13 +99,6 @@ internal sealed class AniBuilder
         return this;
     }
 
-    /// <summary>Writes a complete chunk into the frame list after the frames.</summary>
-    public AniBuilder WithFrameListChunk(byte[] chunk)
-    {
-        _extraFrameListChunks.Add(chunk);
-        return this;
-    }
-
     /// <summary>Writes the frame list before the header rather than after it.</summary>
     public AniBuilder WithFrameListBeforeHeader()
     {
@@ -133,8 +125,37 @@ internal sealed class AniBuilder
     }
 
     /// <summary>A <c>LIST INFO</c> chunk holding the given sub-chunks.</summary>
-    public static byte[] InfoList(params byte[][] subChunks)
-        => Chunk("LIST", [.. Encoding.ASCII.GetBytes("INFO"), .. subChunks.SelectMany(chunk => chunk)]);
+    public static byte[] InfoList(params byte[][] subChunks) => List("INFO", subChunks);
+
+    /// <summary>A <c>LIST fram</c> chunk holding the given sub-chunks, such as ones made by <see cref="Icon"/>.</summary>
+    public static byte[] FrameList(params byte[][] subChunks) => List("fram", subChunks);
+
+    /// <summary>An <c>icon</c> chunk holding one frame.</summary>
+    public static byte[] Icon(byte[] frame) => Chunk("icon", frame);
+
+    /// <summary>A chunk holding 32-bit values, such as a <c>rate</c> or <c>seq </c> chunk.</summary>
+    public static byte[] Values(string id, params uint[] values) => Chunk(id, [.. values.SelectMany(BitConverter.GetBytes)]);
+
+    /// <summary>
+    /// An <c>anih</c> chunk. <paramref name="chunkSize"/> cuts the header short or pads it with zeros, and
+    /// <paramref name="headerSize"/> is the size the header states for itself.
+    /// </summary>
+    public static byte[] Header(uint frameCount, uint stepCount, uint displayRate, uint flags, int chunkSize = HeaderSize, uint headerSize = HeaderSize)
+    {
+        uint[] fields = [headerSize, frameCount, stepCount, 0, 0, 0, 0, displayRate, flags];
+        var fieldBytes = fields.SelectMany(BitConverter.GetBytes).ToArray();
+        var data = new byte[chunkSize];
+        Array.Copy(fieldBytes, data, Math.Min(fieldBytes.Length, chunkSize));
+
+        return Chunk("anih", data);
+    }
+
+    /// <summary>A RIFF ACON file holding exactly the given chunks, in order.</summary>
+    public static byte[] Riff(params byte[][] chunks)
+    {
+        byte[] form = [.. Encoding.ASCII.GetBytes("ACON"), .. chunks.SelectMany(chunk => chunk)];
+        return [.. Encoding.ASCII.GetBytes("RIFF"), .. BitConverter.GetBytes((uint)form.Length), .. form];
+    }
 
     public byte[] Build()
     {
@@ -153,22 +174,17 @@ internal sealed class AniBuilder
         if (_frameListBeforeHeader)
             WriteFrameList(writer);
 
-        WriteChunkHeader(writer, "anih", HeaderSize);
-        writer.Write((uint)HeaderSize);
-        writer.Write(_frameCount ?? (uint)_frames.Count);
-        writer.Write(_stepCount ?? (uint)(_sequence?.Length ?? _frames.Count));
-        writer.Write(0u);
-        writer.Write(0u);
-        writer.Write(0u);
-        writer.Write(0u);
-        writer.Write(DisplayRate);
-        writer.Write(_flags ?? (IconFlag | (_sequence is null ? 0 : SequenceFlag)));
+        writer.Write(Header(
+            _frameCount ?? (uint)_frames.Count,
+            _stepCount ?? (uint)(_sequence?.Length ?? _frames.Count),
+            DisplayRate,
+            _flags ?? (IconFlag | (_sequence is null ? 0 : SequenceFlag))));
 
         if (_rates is not null)
-            WriteValues(writer, "rate", _rates);
+            writer.Write(Values("rate", _rates));
 
         if (_sequence is not null)
-            WriteValues(writer, "seq ", _sequence);
+            writer.Write(Values("seq ", _sequence));
 
         if (!_frameListBeforeHeader)
             WriteFrameList(writer);
@@ -182,7 +198,7 @@ internal sealed class AniBuilder
 
     private void WriteFrameList(BinaryWriter writer)
     {
-        var frameListSize = 4 + _frames.Sum(frame => 8 + Padded(frame.Length)) + _extraFrameListChunks.Sum(chunk => chunk.Length);
+        var frameListSize = 4 + _frames.Sum(frame => 8 + Padded(frame.Length));
 
         WriteChunkHeader(writer, "LIST", frameListSize);
         writer.Write(Encoding.ASCII.GetBytes("fram"));
@@ -194,22 +210,15 @@ internal sealed class AniBuilder
             if (frame.Length % 2 != 0)
                 writer.Write((byte)0);
         }
-
-        foreach (var chunk in _extraFrameListChunks)
-            writer.Write(chunk);
     }
+
+    private static byte[] List(string type, byte[][] subChunks)
+        => Chunk("LIST", [.. Encoding.ASCII.GetBytes(type), .. subChunks.SelectMany(chunk => chunk)]);
 
     private static void WriteChunkHeader(BinaryWriter writer, string id, int size)
     {
         writer.Write(Encoding.ASCII.GetBytes(id));
         writer.Write((uint)size);
-    }
-
-    private static void WriteValues(BinaryWriter writer, string id, uint[] values)
-    {
-        WriteChunkHeader(writer, id, 4 * values.Length);
-        foreach (var value in values)
-            writer.Write(value);
     }
 
     private static int Padded(int length) => length + (length % 2);

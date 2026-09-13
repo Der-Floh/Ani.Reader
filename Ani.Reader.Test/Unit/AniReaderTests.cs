@@ -108,6 +108,9 @@ public sealed class AniReaderTests
         Assert.Null(Reader.Read(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }));
     }
 
+    [Fact]
+    public void Read_AnimationWithoutAHeader_ReturnsNull() => Assert.Null(Reader.Read(AniBuilder.Riff()));
+
     /// <summary>
     /// A .cur file is not RIFF, so it is not an ANI source. The cursor images inside an .ani frame are read
     /// through Ico.Reader instead; see <see cref="Integration.CursorFileTests"/>.

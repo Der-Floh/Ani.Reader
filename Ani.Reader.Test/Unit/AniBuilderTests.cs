@@ -74,6 +74,28 @@ public sealed class AniBuilderTests
     }
 
     [Fact]
+    public void Riff_FromTheFixtureChunks_ReproducesTheFixture()
+    {
+        var bytes = AniBuilder.Riff(
+            AniBuilder.Header(3, 3, 10, AniBuilder.IconFlag),
+            AniBuilder.FrameList([.. AniBuilder.FixtureFrames.Select(AniBuilder.Icon)]));
+
+        Assert.Equal(TestFiles.BytesOf(TestFiles.AnimatedThreeFrame), bytes);
+    }
+
+    [Fact]
+    public void Header_CutsTheFieldsShortAndStatesTheSizeItIsGiven()
+    {
+        var chunk = AniBuilder.Header(3, 4, 10, AniBuilder.IconFlag, chunkSize: 32, headerSize: 40);
+
+        Assert.Equal(8 + 32, chunk.Length);
+        Assert.Equal(32u, BitConverter.ToUInt32(chunk, 4));
+        Assert.Equal(40u, BitConverter.ToUInt32(chunk, 8));
+        Assert.Equal(4u, BitConverter.ToUInt32(chunk, 8 + 8));
+        Assert.Equal(10u, BitConverter.ToUInt32(chunk, 8 + 28));
+    }
+
+    [Fact]
     public void CursorBuilder_WritesOneSolidImagePerSize()
     {
         var icoData = new IcoReader().Read(CursorBuilder.Solid((255, 0, 0), 32, 48));

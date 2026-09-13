@@ -21,7 +21,9 @@ public class AniFrameReference
 
     /// <summary>
     /// The size of the frame data in bytes.
-    /// <para> Rounded up to an even number, since RIFF pads every chunk to a 2-byte boundary. </para>
+    /// <para>
+    /// Includes the pad byte RIFF writes after data of odd size. A chunk cut short by the end of the data ends there.
+    /// </para>
     /// </summary>
     public uint Size { get; set; }
 

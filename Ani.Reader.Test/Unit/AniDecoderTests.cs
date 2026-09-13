@@ -107,6 +107,153 @@ public sealed class AniDecoderTests
         Assert.Null(new AniDecoder().Read(stream));
     }
 
+    private static AniEntry? Decode(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+        return new AniDecoder().Read(stream);
+    }
+
+    /// <summary>
+    /// RIFF pads a chunk of odd size with one byte that its size does not count, and Windows plays such a file.
+    /// </summary>
+    [Fact]
+    public void Read_SkipsThePadByteAfterAnOddSizedChunk()
+    {
+        var entry = Decode(AniBuilder.FromFixture().WithChunkBeforeHeader(AniBuilder.Chunk("JUNK", [1, 2, 3])).Build());
+
+        Assert.NotNull(entry);
+        Assert.Equal(3u, entry.Header.NumFrames);
+        Assert.Equal(3, entry.Frames.Count);
+    }
+
+    [Fact]
+    public void Read_KeepsTheFirstValueOfAnInfoEntryThatRepeats()
+    {
+        var info = AniBuilder.InfoList(
+            AniBuilder.Chunk("INAM", Encoding.ASCII.GetBytes("first\0")),
+            AniBuilder.Chunk("INAM", Encoding.ASCII.GetBytes("second\0")));
+
+        var entry = Decode(AniBuilder.FromFixture().WithChunkBeforeHeader(info).Build());
+
+        Assert.NotNull(entry);
+        Assert.Equal("first", entry.MetaData["INAM"]);
+        Assert.Equal(3, entry.Frames.Count);
+    }
+
+    /// <summary>
+    /// Some writers leave out the pad byte after odd sized INFO text. Windows ignores INFO entirely, so it must not cost
+    /// the animation.
+    /// </summary>
+    [Fact]
+    public void Read_ReadsPastInfoTextWrittenWithoutItsPadByte()
+    {
+        var info = AniBuilder.InfoList(
+            AniBuilder.Chunk("INAM", Encoding.ASCII.GetBytes("abc"), pad: false),
+            AniBuilder.Chunk("IART", Encoding.ASCII.GetBytes("de\0")));
+
+        var entry = Decode(AniBuilder.FromFixture().WithChunkBeforeHeader(info).Build());
+
+        Assert.NotNull(entry);
+        Assert.Equal("abc", entry.MetaData["INAM"]);
+        Assert.Equal("de", entry.MetaData["IART"]);
+        Assert.Equal(3u, entry.Header.NumFrames);
+        Assert.Equal(3, entry.Frames.Count);
+    }
+
+    [Fact]
+    public void Read_StopsReadingInfoAtAnEntryThatRunsPastItsList()
+    {
+        var overrun = AniBuilder.Chunk("IART", Encoding.ASCII.GetBytes("de\0"));
+        BitConverter.GetBytes(200u).CopyTo(overrun, 4);
+        var info = AniBuilder.InfoList(AniBuilder.Chunk("INAM", Encoding.ASCII.GetBytes("abc\0")), overrun);
+
+        var entry = Decode(AniBuilder.FromFixture().WithChunkBeforeHeader(info).Build());
+
+        Assert.NotNull(entry);
+        Assert.Equal("abc", Assert.Single(entry.MetaData).Value);
+        Assert.Equal(3u, entry.Header.NumFrames);
+        Assert.Equal(3, entry.Frames.Count);
+    }
+
+    [Fact]
+    public void Read_CollectsOnlyIconSubChunksAsFrames()
+    {
+        var frames = AniBuilder.FixtureFrames;
+        var bytes = AniBuilder.Riff(
+            AniBuilder.Header(3, 3, 10, AniBuilder.IconFlag),
+            AniBuilder.FrameList(AniBuilder.Icon(frames[0]), AniBuilder.Chunk("JUNK", [1, 2]), AniBuilder.Icon(frames[1]), AniBuilder.Icon(frames[2])));
+
+        var entry = Decode(bytes);
+
+        Assert.NotNull(entry);
+        Assert.Equal(3, entry.Frames.Count);
+        for (var i = 0; i < frames.Count; i++)
+            Assert.Equal(frames[i], bytes.Skip((int)entry.Frames[i].Offset).Take(frames[i].Length));
+    }
+
+    /// <summary>
+    /// Windows plays an animation whatever size its RIFF header states, walking the chunks to the end of the data.
+    /// </summary>
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(4u)]
+    [InlineData(4u + 8 + 36)]
+    public void Read_WalksTheChunksToTheEndOfTheDataWhateverTheRiffSize(uint riffSize)
+    {
+        var bytes = AniBuilder.FromFixture().Build();
+        BitConverter.GetBytes(riffSize).CopyTo(bytes, 4);
+
+        var entry = Decode(bytes);
+
+        Assert.NotNull(entry);
+        Assert.Equal(3, entry.Frames.Count);
+    }
+
+    [Fact]
+    public void Read_EndsAFrameCutShortAtTheEndOfTheData()
+    {
+        var bytes = AniBuilder.FromFixture().Build();
+        Array.Resize(ref bytes, bytes.Length - 20);
+
+        var entry = Decode(bytes);
+
+        Assert.NotNull(entry);
+        var lastFrame = entry.Frames.Last();
+        Assert.Equal(bytes.Length, lastFrame.Offset + lastFrame.Size);
+    }
+
+    [Fact]
+    public void Read_LeavesHeaderFieldsPastItsChunkZero()
+    {
+        var bytes = AniBuilder.Riff(
+            AniBuilder.Header(3, 3, 10, AniBuilder.IconFlag, chunkSize: 32),
+            AniBuilder.Values("seq ", 0, 1, 2),
+            AniBuilder.FrameList([.. AniBuilder.FixtureFrames.Select(AniBuilder.Icon)]));
+
+        var entry = Decode(bytes);
+
+        Assert.NotNull(entry);
+        Assert.Equal(10u, entry.Header.DisplayRate);
+        Assert.False(entry.Header.Flags.IconFlag);
+        Assert.Equal(0u, entry.Header.Flags.Reserved);
+        Assert.Equal([0u, 1u, 2u], entry.FrameSequence);
+        Assert.Equal(3, entry.Frames.Count);
+    }
+
+    [Fact]
+    public void Read_ReturnsNullWithoutAHeaderChunk() => Assert.Null(Decode(AniBuilder.Riff()));
+
+    [Fact]
+    public void Read_ReturnsNullWithoutFrames()
+        => Assert.Null(Decode(AniBuilder.Riff(AniBuilder.Header(3, 3, 10, AniBuilder.IconFlag), AniBuilder.FrameList())));
+
+    /// <summary>
+    /// Windows shows such a file as a still cursor rather than an animation.
+    /// </summary>
+    [Fact]
+    public void Read_ReturnsNullWhenTheFrameListComesBeforeTheHeader()
+        => Assert.Null(Decode(AniBuilder.FromFixture().WithFrameListBeforeHeader().Build()));
+
     [Fact]
     public void Read_TruncatedFile_ReturnsNull()
     {

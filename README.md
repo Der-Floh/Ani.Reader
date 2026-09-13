@@ -52,8 +52,10 @@ using (var streamOrigin = File.OpenRead("path/to/cursor.ani"))
 }
 ```
 
-- `copyStream: true` → The stream is **copied**, allowing access to frames even after the original stream is closed.
+- `copyStream: true` → The stream is **copied**, allowing access to frames even after the original stream is closed. The stream need not be seekable.
 - `copyStream: false` → The stream is **used directly**, making it as **memory-efficient as reading from a file**, but the stream must be seekable and must remain open while accessing frames.
+
+Both modes read from the stream's **current position**, so an animation that follows other data in a stream can be read by positioning the stream at its start first.
 
 > **Note:** All `Read()` overloads return `null` if the file does not exist, the format is unrecognised, or the data cannot be parsed.
 

@@ -54,19 +54,28 @@ public sealed class AniReader
     public AniData[]? Read(byte[] data) => Read(new MemorySource(data), string.Empty);
 
     /// <summary>
-    /// Reads ANI data from a stream.
+    /// Reads ANI data from a stream, starting at its current position.
     /// </summary>
-    /// <param name="stream">The stream containing ANI data.</param>
-    /// <param name="copyStream">If <see langword="true"/>, a copy of the stream is made for safe access; if <see langword="false"/>, the original stream is used and must remain open.</param>
+    /// <param name="stream">The stream containing ANI data, positioned where the data starts.</param>
+    /// <param name="copyStream">
+    /// If <see langword="true"/>, the stream is copied from its current position to its end, so it need not be seekable
+    /// and can be closed once this returns. If <see langword="false"/>, the stream is read in place: it has to be
+    /// seekable and stay open while frames are read, and reading them moves its position.
+    /// </param>
     /// <returns>An array of <see cref="AniData"/> objects, or <see langword="null"/> if the data cannot be read.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if the stream is null.</exception>
+    /// <exception cref="ArgumentException">Thrown if the stream is not readable, or not seekable while <paramref name="copyStream"/> is false.</exception>
     public AniData[]? Read(Stream stream, bool copyStream = true)
     {
+        if (stream is null)
+            throw new ArgumentNullException(nameof(stream));
+
         if (!copyStream && !stream.CanSeek)
             throw new ArgumentException("A non-seekable stream must be copied. Call with copyStream: true.", nameof(stream));
 
         IDataSource dataSource = copyStream
             ? new StreamBufferSource(stream)
-            : new SharedStreamSource(stream);
+            : new StreamSource(stream);
 
         return Read(dataSource, string.Empty);
     }
@@ -75,9 +84,11 @@ public sealed class AniReader
     {
         using var stream = dataSource.GetStream();
 
-        return _configuration.AniPeDecoder.IsPeFormat(stream)
-            ? ReadFromPeFile(stream, dataSource, name)
-            : ReadFromAniFile(dataSource, name);
+        if (_configuration.AniPeDecoder.IsPeFormat(stream))
+            return ReadFromPeFile(stream, dataSource, name);
+
+        stream.Position = 0;
+        return ReadFromAniFile(stream, dataSource, name);
     }
 
     private AniData[]? ReadFromPeFile(Stream stream, IDataSource dataSource, string name)
@@ -96,10 +107,9 @@ public sealed class AniReader
         return decodedResult is null ? null : CreateArray(decodedResult, dataSource, name);
     }
 
-    private AniData[]? ReadFromAniFile(IDataSource dataSource, string name)
+    private AniData[]? ReadFromAniFile(Stream stream, IDataSource dataSource, string name)
     {
-        using var aniStream = dataSource.GetStream();
-        var aniEntry = _configuration.AniDecoder.Read(aniStream);
+        var aniEntry = _configuration.AniDecoder.Read(stream);
         if (aniEntry is null)
             return null;
 

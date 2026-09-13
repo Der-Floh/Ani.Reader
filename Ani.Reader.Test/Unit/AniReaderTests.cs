@@ -77,6 +77,39 @@ public sealed class AniReaderTests
         Assert.Throws<ArgumentException>(() => Reader.Read(stream, copyStream: false));
     }
 
+    [Fact]
+    public async Task Read_CopiedNonSeekableStream_ReadsTheAnimation()
+    {
+        using var stream = new NonSeekableStream(TestFiles.BytesOf(TestFiles.AnimatedThreeFrame));
+
+        var aniData = Assert.Single(Reader.Read(stream, copyStream: true)!);
+
+        Assert.Equal(3, aniData.TotalFrames);
+        Assert.NotNull(await aniData.GetFrameBytes(aniData.Animations[0], aniData.Frames[2]));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Read_Stream_StartsAtItsCurrentPosition(bool copyStream)
+    {
+        var aniBytes = TestFiles.BytesOf(TestFiles.AnimatedThreeFrame);
+        using var stream = new MemoryStream([.. new byte[7], .. aniBytes]) { Position = 7 };
+
+        var aniData = Assert.Single(Reader.Read(stream, copyStream)!);
+
+        var expected = Assert.Single(Reader.Read(aniBytes)!);
+        Assert.Equal(expected.Frames.Select(frame => frame.FrameReference.RealOffset), aniData.Frames.Select(frame => frame.FrameReference.RealOffset));
+        Assert.Equal(
+            await expected.GetFrameBytes(expected.Animations[0], expected.Frames[1]),
+            await aniData.GetFrameBytes(aniData.Animations[0], aniData.Frames[1]));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Read_NullStream_Throws(bool copyStream) => Assert.Throws<ArgumentNullException>(() => Reader.Read((Stream)null!, copyStream));
+
     private sealed class NonSeekableStream(byte[] data) : MemoryStream(data)
     {
         public override bool CanSeek => false;

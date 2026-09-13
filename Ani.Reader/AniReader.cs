@@ -7,6 +7,11 @@ namespace Ani.Reader;
 /// <summary>
 /// Provides functionality to read ANI animation data from files, byte arrays, or streams.
 /// </summary>
+/// <remarks>
+/// Animations whose icon flag is clear, and animations in which no step shows a frame holding an image, are left out.
+/// A standalone .ani file of either kind reads as <see langword="null"/>, and an executable or DLL returns the
+/// animations that remain.
+/// </remarks>
 public sealed class AniReader
 {
     private readonly AniReaderConfiguration _configuration;
@@ -98,32 +103,32 @@ public sealed class AniReader
         if (aniEntry is null)
             return null;
 
-        if (!aniEntry.Header.Flags.IconFlag)
-            return null;
-
         var result = new DecodedAniResult { OriginFileType = AniOriginFileType.Ani };
         result.Entries.Add(aniEntry);
-        return CreateArray(result, dataSource, name);
+
+        var animations = CreateArray(result, dataSource, name);
+        return animations.Length == 0 ? null : animations;
     }
 
     private AniData[] CreateArray(DecodedAniResult decodedAniResult, IDataSource dataSource, string name)
     {
-        var array = new AniData[decodedAniResult.Entries.Count];
-        for (var i = 0; i < decodedAniResult.Entries.Count; i++)
+        var animations = new List<AniData>(decodedAniResult.Entries.Count);
+        foreach (var entry in decodedAniResult.Entries)
         {
-            array[i] = new AniData(decodedAniResult.Entries[i], decodedAniResult.OriginFileType, dataSource, _configuration.IcoReader, _configuration.IcoExporter);
-            if (decodedAniResult.OriginFileType is AniOriginFileType.Executable or AniOriginFileType.Dll)
-            {
-                array[i].Name = $"{name} ({decodedAniResult.Entries[i].Id})";
-            }
-            else
-            {
-                array[i].Name = name;
-                if (i != 0)
-                    name += $"_{i}";
-            }
+            if (!entry.Header.Flags.IconFlag)
+                continue;
+
+            var aniData = new AniData(entry, decodedAniResult.OriginFileType, dataSource, _configuration.IcoReader, _configuration.IcoExporter);
+            if (!aniData.ShowsAnImage)
+                continue;
+
+            aniData.Name = decodedAniResult.OriginFileType is AniOriginFileType.Executable or AniOriginFileType.Dll
+                ? $"{name} ({entry.Id})"
+                : name;
+
+            animations.Add(aniData);
         }
 
-        return array;
+        return [.. animations];
     }
 }

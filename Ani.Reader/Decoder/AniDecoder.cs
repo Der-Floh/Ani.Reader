@@ -23,6 +23,7 @@ public sealed class AniDecoder : IAniDecoder
     private const int IdSize = 4;
     private const int ValueSize = 4;
     private const int HeaderFieldCount = 9;
+    private const uint HeaderChunkSize = HeaderFieldCount * ValueSize;
 
     /// <inheritdoc/>
     public AniEntry? Read(Stream stream)
@@ -79,26 +80,32 @@ public sealed class AniDecoder : IAniDecoder
             var chunkSize = reader.ReadUInt32();
             var chunkStart = stream.Position;
             var chunkEnd = Math.Min(chunkStart + chunkSize, dataEnd);
+            var nextChunk = chunkStart + Padded(chunkSize);
+            var isFrameList = false;
 
             switch (chunkId)
             {
                 case "anih":
-                    entry.Header = ReadHeader(reader, chunkEnd);
+                    ReadHeaderChunk(reader, entry, chunkSize, chunkEnd);
                     break;
                 case "rate":
-                    entry.FrameRates = ReadValues(reader, chunkEnd);
+                    entry.FrameRates = ReadStepValues(reader, entry, chunkSize, chunkEnd);
                     break;
                 case "seq ":
-                    entry.FrameSequence = ReadValues(reader, chunkEnd);
+                    entry.FrameSequence = ReadStepValues(reader, entry, chunkSize, chunkEnd);
                     break;
-                case "LIST" when chunkEnd - chunkStart >= IdSize:
+                case "LIST" when chunkEnd - chunkStart < IdSize:
+                    entry.ChunkLayoutLoadsOnWindows = false;
+                    break;
+                case "LIST":
                     var listType = ReadId(reader);
                     if (listType == "fram")
                     {
                         if (entry.Header is null)
                             return null;
 
-                        entry.Frames.AddRange(ReadFrameReferences(reader, chunkEnd));
+                        isFrameList = true;
+                        ReadFrames(reader, entry, chunkStart + chunkSize);
                     }
                     else if (listType == "INFO")
                     {
@@ -107,9 +114,14 @@ public sealed class AniDecoder : IAniDecoder
                     break;
             }
 
-            var nextChunk = chunkStart + Padded(chunkSize);
             if (nextChunk > dataEnd)
+            {
+                // Windows checks the chunks inside a frame list against the end of the data, but not the list itself.
+                if (!isFrameList)
+                    entry.ChunkLayoutLoadsOnWindows = false;
+
                 break;
+            }
 
             stream.Position = nextChunk;
         }
@@ -122,6 +134,28 @@ public sealed class AniDecoder : IAniDecoder
     private static long Padded(uint size) => size + (size & 1L);
 
     private static bool HasValue(BinaryReader reader, long end) => end - reader.BaseStream.Position >= ValueSize;
+
+    private static void ReadHeaderChunk(BinaryReader reader, AniEntry entry, uint chunkSize, long chunkEnd)
+    {
+        if (chunkSize != HeaderChunkSize || entry.Frames.Count > 0)
+            entry.ChunkLayoutLoadsOnWindows = false;
+
+        if (entry.Header is not null)
+        {
+            entry.FrameRates = [];
+            entry.FrameSequence = [];
+        }
+
+        entry.Header = ReadHeader(reader, chunkEnd);
+    }
+
+    private static List<uint> ReadStepValues(BinaryReader reader, AniEntry entry, uint chunkSize, long chunkEnd)
+    {
+        if (entry.Header is null || chunkSize != (ulong)entry.Header.NumSteps * ValueSize)
+            entry.ChunkLayoutLoadsOnWindows = false;
+
+        return ReadValues(reader, chunkEnd);
+    }
 
     private static AniHeader ReadHeader(BinaryReader reader, long chunkEnd)
     {
@@ -152,35 +186,46 @@ public sealed class AniDecoder : IAniDecoder
         return values;
     }
 
-    private static List<AniFrameReference> ReadFrameReferences(BinaryReader reader, long listEnd)
+    private static void ReadFrames(BinaryReader reader, AniEntry entry, long listEnd)
     {
         var stream = reader.BaseStream;
-        var frames = new List<AniFrameReference>();
+        var dataEnd = stream.Length;
 
         while (listEnd - stream.Position >= ChunkHeaderSize)
         {
+            if (dataEnd - stream.Position < ChunkHeaderSize)
+            {
+                entry.ChunkLayoutLoadsOnWindows = false;
+                return;
+            }
+
             var subChunkId = ReadId(reader);
             var subChunkSize = reader.ReadUInt32();
-            var dataStart = stream.Position;
-            var dataEnd = dataStart + Padded(subChunkSize);
+            var subChunkStart = stream.Position;
+            var nextSubChunk = subChunkStart + Padded(subChunkSize);
 
             if (subChunkId == "icon")
             {
-                frames.Add(new AniFrameReference
+                if (subChunkStart + subChunkSize > dataEnd)
+                    entry.ChunkLayoutLoadsOnWindows = false;
+
+                entry.Frames.Add(new AniFrameReference
                 {
-                    Offset = dataStart,
-                    RealOffset = dataStart,
-                    Size = (uint)(Math.Min(dataEnd, stream.Length) - dataStart)
+                    Offset = subChunkStart,
+                    RealOffset = subChunkStart,
+                    Size = (uint)(Math.Min(nextSubChunk, dataEnd) - subChunkStart)
                 });
             }
+            else if (nextSubChunk > dataEnd)
+            {
+                entry.ChunkLayoutLoadsOnWindows = false;
+            }
 
-            if (dataEnd > listEnd)
-                break;
+            if (nextSubChunk > listEnd || nextSubChunk > dataEnd)
+                return;
 
-            stream.Position = dataEnd;
+            stream.Position = nextSubChunk;
         }
-
-        return frames;
     }
 
     private static void ReadInfo(BinaryReader reader, Dictionary<string, string> metaData, long listEnd)

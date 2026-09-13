@@ -13,15 +13,15 @@ public class AniHeader
     public uint HeaderSize { get; set; }
 
     /// <summary>
-    /// The number of frames stored in this animation.
-    /// <para> Each frame can be an icon, cursor, or raw image. </para>
+    /// The number of frames this animation declares.
+    /// <para> Each frame can be an icon, cursor, or raw image. Windows uses only this many of the stored frames. </para>
     /// </summary>
     public uint NumFrames { get; set; }
 
     /// <summary>
     /// The number of steps in the animation sequence.
-    /// <para> May include duplicate frames. </para>
-    /// <para> Equals <see cref="NumFrames"/> if no 'seq ' chunk is present. </para>
+    /// <para> Several steps can show the same frame. </para>
+    /// <para> Without a <c>seq </c> chunk, the steps show the first <see cref="NumSteps"/> frames in order. </para>
     /// </summary>
     public uint NumSteps { get; set; }
 

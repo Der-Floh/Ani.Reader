@@ -88,6 +88,18 @@ public sealed class AniPeDecoderTests
         });
     }
 
+    [Fact]
+    public void Read_SkipsAnAnimationWhoseIconFlagIsClear()
+    {
+        var image = new FakePeImage(Fixture, AniBuilder.FromFixture().WithFlags(0).Build(), Fixture);
+        var configuration = new AniReaderConfiguration { AniPeDecoder = new AniPeDecoder(image, new AniDecoder()) };
+
+        var animations = new AniReader(configuration).Read(image.Bytes);
+
+        Assert.NotNull(animations);
+        Assert.Equal([" (1)", " (3)"], animations.Select(aniData => aniData.Name));
+    }
+
     /// <summary>
     /// A PE image reduced to what <see cref="AniPeDecoder"/> reads: an MZ signature, then RT_ANICURSOR resources and a
     /// resource tree pointing at them. The resource section's address differs from its file offset, so a resource

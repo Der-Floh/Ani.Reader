@@ -25,13 +25,21 @@ public sealed class AniEntry
     /// The display rate of each step from the <c>rate</c> chunk, in 1/60th of a second (jiffies).
     /// <para> Holds one entry per step, in step order, parallel to <see cref="FrameSequence"/>. </para>
     /// <para> Empty when the file has no <c>rate</c> chunk, in which case every step uses <see cref="AniHeader.DisplayRate"/>. </para>
+    /// <para>
+    /// When the file holds several <c>rate</c> chunks the last one counts, and an <c>anih</c> chunk that follows another
+    /// discards the rates read before it, as Windows does.
+    /// </para>
     /// </summary>
     public List<uint> FrameRates { get; set; } = [];
 
     /// <summary>
     /// The frame shown at each step from the <c>seq </c> chunk, as an index into <see cref="Frames"/>.
     /// <para> Holds one entry per step, so the same frame can be shown more than once. </para>
-    /// <para> Empty when the file has no <c>seq </c> chunk, in which case each frame is one step, in stored order. </para>
+    /// <para> Empty when the file has no <c>seq </c> chunk, in which case the steps show the frames in stored order. </para>
+    /// <para>
+    /// When the file holds several <c>seq </c> chunks the last one counts, and an <c>anih</c> chunk that follows another
+    /// discards the sequence read before it, as Windows does.
+    /// </para>
     /// </summary>
     public List<uint> FrameSequence { get; set; } = [];
 
@@ -41,6 +49,18 @@ public sealed class AniEntry
     /// <para> Other chunks inside the list are skipped. </para>
     /// </summary>
     public List<AniFrameReference> Frames { get; set; } = [];
+
+    /// <summary>
+    /// Whether the chunks are ordered and sized the way Windows requires to load the animation.
+    /// <para>
+    /// Windows walks the chunks in order and refuses the animation when the <c>anih</c> chunk is not 36 bytes long or
+    /// comes after a frame, when a <c>rate</c> or <c>seq </c> chunk comes before <c>anih</c> or does not hold one 4-byte
+    /// entry per step, or when a chunk runs past the end of the data. <see cref="AniData.LoadsOnWindows"/> checks the
+    /// header's values and the frames on top of this.
+    /// </para>
+    /// <para> <see langword="true"/> unless the decoder found such a problem. </para>
+    /// </summary>
+    public bool ChunkLayoutLoadsOnWindows { get; set; } = true;
 
     /// <summary>
     /// The offset of this animation's RIFF data within the stream it was read from.

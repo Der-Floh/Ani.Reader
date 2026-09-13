@@ -68,10 +68,13 @@ using (var streamOrigin = File.OpenRead("path/to/cursor.ani"))
 | `Name`                   | `string`                                   | Derived from the file name or PE resource ID     |
 | `Origin`                 | `AniOriginFileType`                        | `Executable`, `Dll`, or `Ani`                    |
 | `TotalAnimationDuration` | `TimeSpan`                                 | Sum of all frame durations                       |
-| `TotalFrames`            | `int`                                      | Total number of frames in the sequence           |
+| `TotalFrames`            | `int`                                      | Number of steps in `Frames`                      |
 | `FrameRate`              | `float`                                    | Frames per second (`60 / DisplayRate`)           |
 | `Frames`                 | `ReadOnlyCollection<FrameInformation>`     | Ordered sequence of frame steps including timing |
 | `Animations`             | `ReadOnlyCollection<AnimationInformation>` | Available size and bit-depth variants            |
+| `LoadsOnWindows`         | `bool`                                     | Whether Windows loads this animation             |
+
+An animation Windows loads plays exactly the steps Windows plays. One Windows refuses, such as a file whose `seq` chunk does not match its header, is still read as far as it can be, and `LoadsOnWindows` is `false`. The XML documentation of `LoadsOnWindows` lists the rules.
 
 #### FrameInformation Properties
 

@@ -11,8 +11,8 @@ public class AniHeaderFlags
     /// <para> TRUE: Frames contain icon or cursor data. </para>
     /// <para> FALSE: Frames contain raw image data. </para>
     /// <para>
-    /// Only animations whose frames hold icon or cursor data can be read; <see cref="AniReader"/> rejects a standalone
-    /// .ani file with raw frames.
+    /// Only animations whose frames hold icon or cursor data can be read. <see cref="AniReader"/> leaves out animations
+    /// with raw frames, so a standalone .ani file of that kind reads as <see langword="null"/>.
     /// </para>
     /// </summary>
     public bool IconFlag { get; set; }

@@ -27,7 +27,7 @@ public class AniData
     public TimeSpan TotalAnimationDuration { get; private set; }
 
     /// <summary>
-    /// The total number of frames in the animation.
+    /// The number of steps in <see cref="Frames"/>. A frame shown at several steps counts once per step.
     /// </summary>
     public int TotalFrames => Frames?.Count ?? 0;
 
@@ -39,7 +39,8 @@ public class AniData
     public float FrameRate => _aniEntry.Header.DisplayRate > 0 ? 60f / _aniEntry.Header.DisplayRate : 1f;
 
     /// <summary>
-    /// A read-only collection of frames in the animation.
+    /// The steps of the animation in playing order, each naming the frame it shows and for how long.
+    /// <para> <see cref="LoadsOnWindows"/> describes how the steps follow from the file. </para>
     /// </summary>
     public ReadOnlyCollection<FrameInformation> Frames { get; private set; } = null!;
 
@@ -58,7 +59,32 @@ public class AniData
     /// </summary>
     public IDataSource DataSource { get; private set; }
 
-    private IcoData[] _icos = null!;
+    /// <summary>
+    /// Whether Windows loads this animation, in which case <see cref="Frames"/> holds exactly the steps Windows plays.
+    /// <para> Windows loads an animation when all of the following hold: </para>
+    /// <list type="bullet">
+    /// <item><description>The chunks are ordered and sized as <see cref="AniEntry.ChunkLayoutLoadsOnWindows"/> describes.</description></item>
+    /// <item><description>The <c>anih</c> header states a size of 36 bytes.</description></item>
+    /// <item><description>The header declares at least one frame, and no more frames than the file stores. Stored frames past the declared count are ignored.</description></item>
+    /// <item><description>Each declared frame holds at least one image whose data lies within the frame.</description></item>
+    /// <item><description>The header declares at least one step.</description></item>
+    /// <item><description>A <c>seq </c> chunk holds one entry per step, each naming a declared frame, whether or not the sequence flag is set. Without one, the steps show the frames in order, so there can be no more steps than declared frames.</description></item>
+    /// <item><description>A <c>rate</c> chunk holds one entry per step. Without one, the header's display rate is at least 1.</description></item>
+    /// </list>
+    /// <para>
+    /// Windows refuses any other animation, which is then read as far as it can be: there is a step for each <c>seq </c>
+    /// entry, or for each stored frame; each step lasts its <c>rate</c> entry, or the display rate; a <c>seq </c> entry
+    /// past the last frame shows the last frame; and a step whose frame holds no readable image stays in
+    /// <see cref="Frames"/>, with <see cref="GetFrameBytes"/> returning <see langword="null"/> for it.
+    /// </para>
+    /// </summary>
+    public bool LoadsOnWindows { get; }
+
+    /// <summary>
+    /// Whether at least one step shows a frame that holds an image.
+    /// </summary>
+    internal bool ShowsAnImage { get; }
+
     private readonly AniEntry _aniEntry;
     private readonly IIcoExporter _icoExporter;
 
@@ -70,8 +96,16 @@ public class AniData
         Reader = icoReader;
         _icoExporter = icoExporter ?? throw new ArgumentNullException(nameof(icoExporter));
         _aniEntry = aniEntry ?? throw new ArgumentNullException(nameof(aniEntry));
-        CalculateFrames();
-        InitializeIcoDatas();
+
+        var frameImages = aniEntry.Frames.Select(frame => new Lazy<IcoData?>(() => ReadFrameImage(frame))).ToArray();
+        bool FrameHoldsImage(int frameIndex) => HoldsImage(frameImages[frameIndex].Value, aniEntry.Frames[frameIndex]);
+
+        LoadsOnWindows = AniPlayback.LoadsOnWindows(aniEntry, FrameHoldsImage);
+        var steps = AniPlayback.Steps(aniEntry, LoadsOnWindows);
+        ShowsAnImage = steps.Any(step => FrameHoldsImage(step.FrameIndex));
+
+        CalculateFrames(steps);
+        InitializeIcoDatas([.. steps.Select(step => frameImages[step.FrameIndex].Value)]);
     }
 
     /// <summary>
@@ -127,7 +161,14 @@ public class AniData
 
             var imageReference = FindByAnimationInformation(icoData, aniInfo);
             var fileName = Path.Combine(subPath, $"frame_{frame.Position} ({imageReference.Width}x{imageReference.Height} {imageReference.BitCount} bit).png");
-            await _icoExporter.SaveImageAsync(icoData, imageReference, fileName);
+            try
+            {
+                await _icoExporter.SaveImageAsync(icoData, imageReference, fileName);
+            }
+            catch (Exception exception) when (IsUndecodableImage(exception))
+            {
+                continue;
+            }
         }
     }
 
@@ -189,8 +230,8 @@ public class AniData
     /// <param name="aniInfo">The size to take from the frame, one of <see cref="Animations"/>.</param>
     /// <param name="frame">The frame to decode, one of <see cref="Frames"/>.</param>
     /// <returns>
-    /// The PNG encoded image, or <see langword="null"/> if the frame's data cannot be read as icon or cursor data or
-    /// holds no image.
+    /// The PNG encoded image, or <see langword="null"/> if the frame's data cannot be read as icon or cursor data, holds
+    /// no image, or holds an image that cannot be decoded.
     /// </returns>
     public async Task<byte[]?> GetFrameBytes(AnimationInformation aniInfo, FrameInformation frame)
     {
@@ -203,42 +244,37 @@ public class AniData
             return null;
 
         var imageReference = FindByAnimationInformation(icoData, aniInfo);
-        return await icoData.GetImageAsync(imageReference);
+        try
+        {
+            return await icoData.GetImageAsync(imageReference);
+        }
+        catch (Exception exception) when (IsUndecodableImage(exception))
+        {
+            return null;
+        }
     }
 
-    private void InitializeIcoDatas()
+    private static bool IsUndecodableImage(Exception exception) => exception is EndOfStreamException or InvalidDataException;
+
+    private IcoData? ReadFrameImage(AniFrameReference frame)
+    {
+        using var sourceStream = DataSource.GetStream();
+        using var frameStream = frame.GetFrameStream(sourceStream);
+        return Reader.Read(frameStream);
+    }
+
+    private static bool HoldsImage(IcoData? icoData, AniFrameReference frame)
+        => icoData is not null && icoData.ImageReferences.Any(image => (long)image.Offset + image.Size <= frame.Size);
+
+    private void InitializeIcoDatas(IReadOnlyList<IcoData?> stepImages)
     {
         var animationInfos = new List<AnimationInformation>();
-        _icos = new IcoData[TotalFrames];
 
         for (var i = 0; i < Frames.Count; i++)
         {
-            var frame = Frames[i];
-            using var frameBaseStream = DataSource.GetStream();
-            using var frameChunk = frame.FrameReference.GetFrameStream(frameBaseStream);
-            var icoData = Reader.Read(frameChunk) ?? throw new Exception($"The frame at position {frame.Position} could not be read.");
-
-            if (icoData.ImageReferences.Count == 0)
-            {
-                // Invalid Frame
-            }
-            else
-            {
-                var variations = new List<FrameVariationInformation>();
-                foreach (var imageRef in icoData.ImageReferences)
-                {
-                    variations.Add(new FrameVariationInformation()
-                    {
-                        Height = imageRef.Height,
-                        Width = imageRef.Width,
-                        BitCount = imageRef.BitCount,
-                        HotspotX = imageRef.HotspotX,
-                        HotspotY = imageRef.HotspotY
-                    });
-                }
-
-                frame.VariationDetails = variations;
-            }
+            var icoData = stepImages[i];
+            if (icoData is not null && icoData.ImageReferences.Count > 0)
+                Frames[i].VariationDetails = icoData.ImageReferences.Select(ToVariation).ToList();
 
             var currentAnimations = GetAnimations(icoData);
             if (animationInfos.Count == 0)
@@ -249,52 +285,46 @@ public class AniData
             {
                 for (var aniIndex = animationInfos.Count - 1; aniIndex >= 0; aniIndex--)
                 {
-                    var animation = animationInfos[aniIndex];
-                    if (!currentAnimations.Contains(animation))
-                    {
+                    if (!currentAnimations.Contains(animationInfos[aniIndex]))
                         animationInfos.RemoveAt(aniIndex);
-                    }
                 }
             }
-
-            _icos[i] = icoData;
         }
 
         foreach (var animationInfo in animationInfos)
-        {
-            var hotspotInfo = new List<FrameHotspot>();
-            for (var pos = 0; pos < _icos.Length; pos++)
-            {
-                try
-                {
-                    var imageReference = FindByAnimationInformation(_icos[pos], animationInfo);
-
-                    hotspotInfo.Add(new FrameHotspot()
-                    {
-                        FramePosition = pos,
-                        HotspotX = imageReference.HotspotX,
-                        HotspotY = imageReference.HotspotY
-                    });
-                }
-                catch (InvalidOperationException)
-                {
-                    hotspotInfo.Add(new FrameHotspot()
-                    {
-                        FramePosition = pos,
-                        HotspotX = 0,
-                        HotspotY = 0,
-                    });
-                }
-            }
-
-            animationInfo.FrameHotspots = hotspotInfo;
-        }
+            animationInfo.FrameHotspots = stepImages.Select((icoData, position) => HotspotOf(icoData, animationInfo, position)).ToList();
 
         Animations = new ReadOnlyCollection<AnimationInformation>(animationInfos);
     }
 
-    private static List<AnimationInformation> GetAnimations(IcoData icoData)
+    private static FrameVariationInformation ToVariation(ImageReference image) => new()
     {
+        Width = image.Width,
+        Height = image.Height,
+        BitCount = image.BitCount,
+        HotspotX = image.HotspotX,
+        HotspotY = image.HotspotY
+    };
+
+    private FrameHotspot HotspotOf(IcoData? icoData, AnimationInformation animationInfo, int position)
+    {
+        var imageReference = icoData is null || icoData.ImageReferences.Count == 0
+            ? null
+            : FindByAnimationInformation(icoData, animationInfo);
+
+        return new FrameHotspot
+        {
+            FramePosition = position,
+            HotspotX = imageReference?.HotspotX ?? 0,
+            HotspotY = imageReference?.HotspotY ?? 0
+        };
+    }
+
+    private static List<AnimationInformation> GetAnimations(IcoData? icoData)
+    {
+        if (icoData is null)
+            return [];
+
         var currentAnimations = icoData.ImageReferences
             .GroupBy(x => (x.Width, x.Height))
             .Select(group => group.OrderByDescending(EffectiveBitCount).First())
@@ -319,35 +349,27 @@ public class AniData
     private static int EffectiveBitCount(ImageReference imageReference)
         => imageReference.Format == IcoImageFormat.Png ? 32 : imageReference.BitCount;
 
-    private void CalculateFrames()
+    private void CalculateFrames(IReadOnlyList<(int FrameIndex, uint Rate)> steps)
     {
-        var frameList = new List<FrameInformation>();
+        var frameList = new List<FrameInformation>(steps.Count);
         var currentStart = TimeSpan.Zero;
 
-        var frameSequence = _aniEntry.FrameSequence;
-        if (frameSequence.Count == 0)
+        for (var i = 0; i < steps.Count; i++)
         {
-            frameSequence = Enumerable.Range(0, _aniEntry.Frames.Count).Select(i => (uint)i).ToList();
-        }
-
-        for (var i = 0; i < frameSequence.Count; i++)
-        {
-            var frameIndex = (int)frameSequence[i];
-            var frameDuration = i < _aniEntry.FrameRates.Count ? _aniEntry.FrameRates[i] : _aniEntry.Header.DisplayRate;
-            var duration = TimeSpan.FromSeconds(frameDuration / 60.0);
+            var duration = TimeSpan.FromSeconds(steps[i].Rate / 60.0);
 
             frameList.Add(new FrameInformation
             {
                 Position = i,
                 Start = currentStart,
                 Duration = duration,
-                FrameReference = _aniEntry.Frames[frameIndex]
+                FrameReference = _aniEntry.Frames[steps[i].FrameIndex]
             });
 
             currentStart += duration;
         }
 
         Frames = new ReadOnlyCollection<FrameInformation>(frameList);
-        TotalAnimationDuration = Frames.LastOrDefault()?.Start + Frames.LastOrDefault()?.Duration ?? TimeSpan.Zero;
+        TotalAnimationDuration = currentStart;
     }
 }

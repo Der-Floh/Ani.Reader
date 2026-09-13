@@ -11,7 +11,12 @@ public interface IAniPeDecoder
     /// Decodes ANI cursor resources from the given PE file stream.
     /// </summary>
     /// <param name="stream">The stream containing PE file data that may include ANI cursor resources.</param>
-    /// <returns>A <see cref="DecodedAniResult"/> containing the decoded ANI entries and metadata, or <see langword="null"/> if decoding fails.</returns>
+    /// <returns>
+    /// A <see cref="DecodedAniResult"/> containing the decoded ANI entries and metadata, or <see langword="null"/> if the
+    /// stream does not hold an image. An image without animated cursors gives a result without entries.
+    /// </returns>
+    /// <exception cref="InvalidDataException">The headers or the resource tree of the image are malformed.</exception>
+    /// <exception cref="EndOfStreamException">The stream ends inside the headers or the resource tree.</exception>
     DecodedAniResult? GetDecodedAniResult(Stream stream);
 
     /// <summary>

@@ -33,6 +33,43 @@ public sealed class AniPeDecoderTests
         Assert.All(result.Entries, entry => Assert.Equal(3, entry.Frames.Count));
     }
 
+    /// <summary>
+    /// A packer can leave a data entry pointing at memory it only fills at run time, so the resource bytes are not in the
+    /// file at all.
+    /// </summary>
+    [Fact]
+    public void GetDecodedAniResult_SkipsAResourceWhoseDataIsNotInTheFile()
+    {
+        var image = new FakePeImage(Fixture, Fixture, Fixture) { ResourceOutsideTheFile = 2 };
+        using var stream = new MemoryStream(image.Bytes);
+
+        var result = new AniPeDecoder(image, new AniDecoder()).GetDecodedAniResult(stream);
+
+        Assert.NotNull(result);
+        Assert.Equal(new[] { 1, 3 }, result.Entries.Select(entry => entry.Id));
+    }
+
+    [Fact]
+    public void GetDecodedAniResult_ReadsAnImageWithoutResourcesAsHoldingNoAnimations()
+    {
+        var image = new FakePeImage(Fixture) { HasResources = false };
+        using var stream = new MemoryStream(image.Bytes);
+
+        var result = new AniPeDecoder(image, new AniDecoder()).GetDecodedAniResult(stream);
+
+        Assert.NotNull(result);
+        Assert.Empty(result.Entries);
+    }
+
+    [Fact]
+    public void Read_ReturnsNullWhenTheImageTurnsOutMalformed()
+    {
+        var image = new FakePeImage(Fixture) { IsMalformed = true };
+        var configuration = new AniReaderConfiguration { AniPeDecoder = new AniPeDecoder(image, new AniDecoder()) };
+
+        Assert.Null(new AniReader(configuration).Read(image.Bytes));
+    }
+
     [Fact]
     public void Read_ReturnsEveryReadableAnimationOfTheDll()
     {
@@ -90,20 +127,43 @@ public sealed class AniPeDecoderTests
             {
                 Name = "Root",
                 Level = 1,
-                Section = new SectionHeader { Name = ".rsrc", VirtualAddress = SectionAddress, SizeOfRawData = (uint)Bytes.Length },
+                Sections = [new SectionHeader { Name = ".rsrc", VirtualAddress = SectionAddress, SizeOfRawData = (uint)Bytes.Length }],
                 Subdirectories = [new ResourceDirectory { Name = ResourceType.RT_ANICURSOR.ToString(), Level = 2, Subdirectories = resourceDirectories }],
             };
         }
 
         public byte[] Bytes { get; }
 
+        /// <summary>The id of a resource whose data entry points past everything the file stores, or 0 for none.</summary>
+        public int ResourceOutsideTheFile { get; init; }
+
+        public bool HasResources { get; init; } = true;
+
+        public bool IsMalformed { get; init; }
+
         public long OffsetOf(int resourceId) => _offsets[resourceId - 1];
 
         public MzHeader DecodeMZ(Stream stream) => new PeFileDecoder().DecodeMZ(stream);
 
-        public PeHeader DecodePE(Stream stream) => new() { Characteristics = Characteristics.ImageFileDLL };
+        public PeHeader DecodePE(Stream stream) => IsMalformed
+            ? throw new InvalidDataException("The fake image is malformed.")
+            : new() { Characteristics = Characteristics.ImageFileDLL, Optional = new OptionalHeader() };
 
-        public ResourceDirectory? DecodeResourceDirectory(Stream stream, PeHeader peHeader) => _root;
+        public ResourceDirectory? DecodeResourceDirectory(Stream stream, PeHeader peHeader)
+        {
+            if (!HasResources)
+                return null;
+
+            if (ResourceOutsideTheFile == 0)
+                return _root;
+
+            var typeDirectory = _root.Subdirectories[0];
+            var moved = typeDirectory.Subdirectories.Select(resource => resource.Name == ResourceOutsideTheFile.ToString(CultureInfo.InvariantCulture)
+                ? resource with { DataEntries = [resource.DataEntries[0] with { DataRVA = SectionAddress + (uint)Bytes.Length + 0x1000 }] }
+                : resource);
+
+            return _root with { Subdirectories = [typeDirectory with { Subdirectories = [.. moved] }] };
+        }
 
         public bool IsPeFormat(MzHeader mzHeader) => mzHeader.HasMzSignature;
 

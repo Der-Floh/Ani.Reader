@@ -32,8 +32,7 @@ public sealed class AniPeDecoder : IAniPeDecoder
             return null;
 
         var peHeader = _peDecoder.DecodePE(stream);
-        var resourceDirectory = _peDecoder.DecodeResourceDirectory(stream, peHeader);
-        if (resourceDirectory is null)
+        if (peHeader.Optional is null)
             return null;
 
         var result = new DecodedAniResult
@@ -43,7 +42,10 @@ public sealed class AniPeDecoder : IAniPeDecoder
                 : AniOriginFileType.Executable
         };
 
-        AddAniCursors(result, resourceDirectory, stream);
+        var resourceDirectory = _peDecoder.DecodeResourceDirectory(stream, peHeader);
+        if (resourceDirectory is not null)
+            AddAniCursors(result, resourceDirectory, stream);
+
         return result;
     }
 
@@ -53,14 +55,15 @@ public sealed class AniPeDecoder : IAniPeDecoder
     private void AddAniCursors(DecodedAniResult result, ResourceDirectory resourceDirectory, Stream stream)
     {
         var aniResources = resourceDirectory.GetResources(ResourceType.RT_ANICURSOR.ToString());
-        var resourceSection = resourceDirectory.Section;
-        if (aniResources is null || resourceSection is null)
+        if (aniResources is null)
             return;
 
         for (var i = 0; i < aniResources.Length; i++)
         {
             var resource = aniResources[i];
-            var fileOffset = resource.GetFileOffset(resourceSection);
+            if (!resource.TryGetFileOffset(resourceDirectory.Sections, out var fileOffset))
+                continue;
+
             var entry = _aniDecoder.Read(stream, fileOffset, resource.Size);
             if (entry is null)
                 continue;

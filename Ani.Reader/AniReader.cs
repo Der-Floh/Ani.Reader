@@ -1,4 +1,4 @@
-﻿using Ani.Reader.Models;
+using Ani.Reader.Models;
 
 using Ico.Reader.Data.Source;
 
@@ -38,18 +38,7 @@ public sealed class AniReader
         if (!File.Exists(filePath))
             return null;
 
-        var fileName = Path.GetFileNameWithoutExtension(filePath);
-        var dataSource = new PathSource(filePath);
-        using var stream = dataSource.GetStream();
-
-        if (!_configuration.AniPeDecoder.IsPeFormat(stream))
-            return ReadFromAniFile(dataSource, fileName);
-
-        var decodedResult = _configuration.AniPeDecoder.GetDecodedAniResult(stream);
-        if (decodedResult is null)
-            return null;
-
-        return CreateArray(decodedResult, dataSource, fileName);
+        return Read(new PathSource(filePath), Path.GetFileNameWithoutExtension(filePath));
     }
 
     /// <summary>
@@ -57,20 +46,7 @@ public sealed class AniReader
     /// </summary>
     /// <param name="data">The byte array containing ANI data.</param>
     /// <returns>An array of <see cref="AniData"/> objects, or <see langword="null"/> if the data cannot be read.</returns>
-    public AniData[]? Read(byte[] data)
-    {
-        var dataSource = new MemorySource(data);
-        using var stream = dataSource.GetStream();
-
-        if (!_configuration.AniPeDecoder.IsPeFormat(stream))
-            return ReadFromAniFile(dataSource, string.Empty);
-
-        var decodedResult = _configuration.AniPeDecoder.GetDecodedAniResult(stream);
-        if (decodedResult is null)
-            return null;
-
-        return CreateArray(decodedResult, dataSource, string.Empty);
-    }
+    public AniData[]? Read(byte[] data) => Read(new MemorySource(data), string.Empty);
 
     /// <summary>
     /// Reads ANI data from a stream.
@@ -87,16 +63,32 @@ public sealed class AniReader
             ? new StreamBufferSource(stream)
             : new SharedStreamSource(stream);
 
-        using var readStream = dataSource.GetStream();
+        return Read(dataSource, string.Empty);
+    }
 
-        if (!_configuration.AniPeDecoder.IsPeFormat(readStream))
-            return ReadFromAniFile(dataSource, string.Empty);
+    private AniData[]? Read(IDataSource dataSource, string name)
+    {
+        using var stream = dataSource.GetStream();
 
-        var decodedResult = _configuration.AniPeDecoder.GetDecodedAniResult(readStream);
-        if (decodedResult is null)
+        return _configuration.AniPeDecoder.IsPeFormat(stream)
+            ? ReadFromPeFile(stream, dataSource, name)
+            : ReadFromAniFile(dataSource, name);
+    }
+
+    private AniData[]? ReadFromPeFile(Stream stream, IDataSource dataSource, string name)
+    {
+        DecodedAniResult? decodedResult;
+        try
+        {
+            decodedResult = _configuration.AniPeDecoder.GetDecodedAniResult(stream);
+        }
+        catch (Exception exception) when (exception is EndOfStreamException or InvalidDataException)
+        {
+            // A malformed executable is a parse failure, and every Read overload reports those as null.
             return null;
+        }
 
-        return CreateArray(decodedResult, dataSource, string.Empty);
+        return decodedResult is null ? null : CreateArray(decodedResult, dataSource, name);
     }
 
     private AniData[]? ReadFromAniFile(IDataSource dataSource, string name)

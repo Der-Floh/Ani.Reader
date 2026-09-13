@@ -30,8 +30,10 @@ public static class WebPCreator
     /// <param name="aniInfo">The size to encode, one of <see cref="AniData.Animations"/>.</param>
     /// <returns>A task that completes once the file has been written.</returns>
     /// <remarks>
-    /// Frames whose data cannot be read, and frames shown for an hour or longer, are left out. Frame durations are
-    /// rounded to hundredths of a second.
+    /// Frames shown for an hour or longer are left out together with their time. A frame whose data cannot be read
+    /// or holds no image is left out too, but its time goes to the frame before it, or to the frame after it when it
+    /// comes first, so the remaining frames keep their place in the animation. Frame durations are rounded to
+    /// hundredths of a second.
     /// </remarks>
     public static async Task SaveAsWebP(this AniData aniData, string path, AnimationInformation aniInfo)
     {
@@ -59,49 +61,53 @@ public static class WebPCreator
 
     private static async Task<MagickImageCollection> CreateCollection(AniData aniData, AnimationInformation aniInfo)
     {
-        long durationCorrection = 0;
+        var shownFrames = await CollectShownFrames(aniData, aniInfo);
+
         var collection = new MagickImageCollection();
-        foreach (var frame in aniData.Frames)
+        foreach (var shownFrame in shownFrames)
         {
-            var duration = frame.Duration;
-            if (frame.Duration >= MaxFrameDuration)
-            {
-                durationCorrection += frame.Duration.Ticks;
-                continue;
-            }
-            else if (durationCorrection != 0)
-            {
-                duration -= TimeSpan.FromTicks(durationCorrection);
-            }
-
-            var frameChunk = frame.FrameReference.GetFrameStream(aniData.DataSource.GetStream());
-            var icoData = aniData.Reader.Read(frameChunk);
-            if (icoData is null)
-            {
-                durationCorrection += frame.Duration.Ticks;
-                continue;
-            }
-
-            if (icoData.ImageReferences.Count == 0) // Possibly make available via config?
-            {
-                durationCorrection += frame.Duration.Ticks;
-                continue;
-            }
-
-            var imageReference = aniData.FindByAnimationInformation(icoData, aniInfo);
-            var pngData = await icoData.GetImageAsync(imageReference);
-            using var ms = new MemoryStream(pngData);
-            var magickImage = new MagickImage(ms)
+            using var stream = new MemoryStream(shownFrame.PngData);
+            collection.Add(new MagickImage(stream)
             {
                 Format = MagickFormat.Png32,
                 BackgroundColor = MagickColors.Transparent,
-                AnimationDelay = (uint)Math.Round(duration.TotalMilliseconds / 10, MidpointRounding.AwayFromZero) // WebP Delay in 1/100s
-            };
-            collection.Add(magickImage);
+                AnimationDelay = ToAnimationDelay(shownFrame.Duration),
+            });
         }
 
         return collection;
     }
+
+    private static async Task<List<ShownFrame>> CollectShownFrames(AniData aniData, AnimationInformation aniInfo)
+    {
+        var shownFrames = new List<ShownFrame>();
+        var carriedDuration = TimeSpan.Zero;
+        foreach (var frame in aniData.Frames)
+        {
+            if (frame.Duration >= MaxFrameDuration)
+                continue;
+
+            var pngData = await aniData.GetFrameBytes(aniInfo, frame);
+            if (pngData is null)
+            {
+                if (shownFrames.Count == 0)
+                    carriedDuration += frame.Duration;
+                else
+                    shownFrames[shownFrames.Count - 1].Duration += frame.Duration;
+
+                continue;
+            }
+
+            shownFrames.Add(new ShownFrame(pngData, frame.Duration + carriedDuration));
+            carriedDuration = TimeSpan.Zero;
+        }
+
+        return shownFrames;
+    }
+
+    // AnimationDelay counts hundredths of a second at Magick.NET's default AnimationTicksPerSecond.
+    private static uint ToAnimationDelay(TimeSpan duration)
+        => (uint)Math.Round(duration.TotalMilliseconds / 10, MidpointRounding.AwayFromZero);
 
     private static string InitializePath(string path, AniData aniData, AnimationInformation aniInfo)
     {
@@ -114,5 +120,18 @@ public static class WebPCreator
             Directory.CreateDirectory(fileDir);
 
         return filePath;
+    }
+
+    private sealed class ShownFrame
+    {
+        public ShownFrame(byte[] pngData, TimeSpan duration)
+        {
+            PngData = pngData;
+            Duration = duration;
+        }
+
+        public byte[] PngData { get; }
+
+        public TimeSpan Duration { get; set; }
     }
 }

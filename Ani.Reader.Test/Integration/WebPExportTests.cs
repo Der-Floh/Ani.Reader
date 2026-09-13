@@ -186,4 +186,59 @@ public sealed class WebPExportTests
             await aniData.GetWebpBytes(animation),
             await File.ReadAllBytesAsync(target, TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task GetWebpBytes_DropsAStepOfAnHourOrMoreWithoutShorteningTheOthers()
+    {
+        var aniData = Read(AniBuilder.FromFixture().WithRates(10, 216000, 30));
+
+        Assert.Equal(new[] { 170, 500 }, await ExportedDurations(aniData));
+    }
+
+    [Fact]
+    public async Task GetWebpBytes_GivesTheTimeOfAFrameWithoutAnImageToTheFrameBeforeIt()
+    {
+        var aniData = Read(new AniBuilder()
+            .AddFrame(AniBuilder.FixtureFrames[0])
+            .AddFrame(AniBuilder.EmptyCursor)
+            .AddFrame(AniBuilder.FixtureFrames[2])
+            .WithRates(10, 20, 30));
+
+        Assert.Equal(new[] { 500, 500 }, await ExportedDurations(aniData));
+    }
+
+    [Fact]
+    public async Task GetWebpBytes_GivesTheTimeOfALeadingFrameWithoutAnImageToTheFrameAfterIt()
+    {
+        var aniData = Read(new AniBuilder()
+            .AddFrame(AniBuilder.EmptyCursor)
+            .AddFrame(AniBuilder.FixtureFrames[0])
+            .AddFrame(AniBuilder.FixtureFrames[2])
+            .WithRates(20, 10, 30));
+
+        Assert.Equal(new[] { 500, 500 }, await ExportedDurations(aniData));
+    }
+
+    /// <summary>
+    /// Two 166.66 ms steps merged into one frame last 333.33 ms, which rounds to 330 ms. Rounding each step before
+    /// adding them would give 340 ms.
+    /// </summary>
+    [Fact]
+    public async Task GetWebpBytes_RoundsAMergedDurationOnce()
+    {
+        var aniData = Read(new AniBuilder()
+            .AddFrame(AniBuilder.FixtureFrames[0])
+            .AddFrame(AniBuilder.EmptyCursor)
+            .AddFrame(AniBuilder.FixtureFrames[2])
+            .WithRates(10, 10, 10));
+
+        Assert.Equal(new[] { 330, 170 }, await ExportedDurations(aniData));
+    }
+
+    private static AniData Read(AniBuilder builder) =>
+        Assert.Single(new AniReader().Read(builder.Build())!);
+
+    private static async Task<IEnumerable<int>> ExportedDurations(AniData aniData) =>
+        WebPAnimation.ReadFrameInfo((await aniData.GetWebpBytes(aniData.Animations[0]))!)
+            .Select(frame => frame.DurationMilliseconds);
 }

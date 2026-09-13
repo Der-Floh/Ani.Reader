@@ -38,7 +38,7 @@ public static class WebPCreator
     public static async Task SaveAsWebP(this AniData aniData, string path, AnimationInformation aniInfo)
     {
         var outputFile = InitializePath(path, aniData, aniInfo);
-        using var collection = await CreateCollection(aniData, aniInfo);
+        using var collection = await CreateCollection(aniData, aniInfo).ConfigureAwait(false);
         collection.Write(outputFile, WriteDefines);
     }
 
@@ -53,7 +53,7 @@ public static class WebPCreator
     /// </remarks>
     public static async Task<byte[]> GetWebpBytes(this AniData aniData, AnimationInformation aniInfo)
     {
-        using var collection = await CreateCollection(aniData, aniInfo);
+        using var collection = await CreateCollection(aniData, aniInfo).ConfigureAwait(false);
         using var memoryStream = new MemoryStream();
         collection.Write(memoryStream, WriteDefines);
         return memoryStream.ToArray();
@@ -61,7 +61,7 @@ public static class WebPCreator
 
     private static async Task<MagickImageCollection> CreateCollection(AniData aniData, AnimationInformation aniInfo)
     {
-        var shownFrames = await CollectShownFrames(aniData, aniInfo);
+        var shownFrames = await CollectShownFrames(aniData, aniInfo).ConfigureAwait(false);
 
         var collection = new MagickImageCollection();
         foreach (var shownFrame in shownFrames)
@@ -87,7 +87,7 @@ public static class WebPCreator
             if (frame.Duration >= MaxFrameDuration)
                 continue;
 
-            var pngData = await aniData.GetFrameBytes(aniInfo, frame);
+            var pngData = await aniData.GetFrameBytes(aniInfo, frame).ConfigureAwait(false);
             if (pngData is null)
             {
                 if (shownFrames.Count == 0)
@@ -102,7 +102,7 @@ public static class WebPCreator
             carriedDuration = TimeSpan.Zero;
         }
 
-        if (shownFrames.Count == 0 && await FirstImage(aniData, aniInfo) is { } stillImage)
+        if (shownFrames.Count == 0 && await FirstImage(aniData, aniInfo).ConfigureAwait(false) is { } stillImage)
             shownFrames.Add(new ShownFrame(stillImage, TimeSpan.Zero));
 
         return shownFrames;
@@ -112,7 +112,7 @@ public static class WebPCreator
     {
         foreach (var frame in aniData.Frames)
         {
-            if (await aniData.GetFrameBytes(aniInfo, frame) is { } pngData)
+            if (await aniData.GetFrameBytes(aniInfo, frame).ConfigureAwait(false) is { } pngData)
                 return pngData;
         }
 

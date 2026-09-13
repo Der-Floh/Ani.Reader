@@ -171,7 +171,7 @@ public class AniData
             var fileName = Path.Combine(subPath, $"frame_{frame.Position} ({imageReference.Width}x{imageReference.Height} {imageReference.BitCount} bit).png");
             try
             {
-                await _icoExporter.SaveImageAsync(icoData, imageReference, fileName);
+                await _icoExporter.SaveImageAsync(icoData, imageReference, fileName).ConfigureAwait(false);
             }
             catch (Exception exception) when (IsUndecodableImage(exception))
             {
@@ -253,7 +253,7 @@ public class AniData
         var imageReference = FindByAnimationInformation(icoData, aniInfo);
         try
         {
-            return await icoData.GetImageAsync(imageReference);
+            return await icoData.GetImageAsync(imageReference).ConfigureAwait(false);
         }
         catch (Exception exception) when (IsUndecodableImage(exception))
         {

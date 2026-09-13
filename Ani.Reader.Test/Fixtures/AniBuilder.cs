@@ -3,19 +3,26 @@ using System.Text;
 namespace Ani.Reader.Test.Fixtures;
 
 /// <summary>
-/// Writes ANI files in memory, so tests can pair the frames of <see cref="TestFiles.AnimatedThreeFrame"/> with
-/// rate and sequence data the committed fixture does not carry.
+/// Writes ANI files in memory, so tests can pair frames with header counts, flags, rate and sequence data and chunk
+/// layouts the committed fixture does not carry.
 /// </summary>
 internal sealed class AniBuilder
 {
+    public const uint IconFlag = 1;
+    public const uint SequenceFlag = 2;
+
     private const int HeaderSize = 36;
-    private const uint IconFlag = 1;
-    private const uint SequenceFlag = 2;
 
     private readonly List<byte[]> _frames = [];
     private readonly List<long> _frameOffsets = [];
+    private readonly List<byte[]> _chunksBeforeHeader = [];
+    private readonly List<byte[]> _extraFrameListChunks = [];
     private uint[]? _rates;
     private uint[]? _sequence;
+    private uint? _frameCount;
+    private uint? _stepCount;
+    private uint? _flags;
+    private bool _frameListBeforeHeader;
 
     /// <summary>
     /// The frame payloads of <see cref="TestFiles.AnimatedThreeFrame"/>, read from its chunks directly so the
@@ -65,33 +72,97 @@ internal sealed class AniBuilder
         return this;
     }
 
+    /// <summary>Writes this frame count into the header instead of the number of frames added.</summary>
+    public AniBuilder WithFrameCount(uint frameCount)
+    {
+        _frameCount = frameCount;
+        return this;
+    }
+
+    /// <summary>Writes this step count into the header instead of the sequence length or the frame count.</summary>
+    public AniBuilder WithStepCount(uint stepCount)
+    {
+        _stepCount = stepCount;
+        return this;
+    }
+
+    /// <summary>Writes these flags into the header instead of the icon flag and, with a sequence, the sequence flag.</summary>
+    public AniBuilder WithFlags(uint flags)
+    {
+        _flags = flags;
+        return this;
+    }
+
+    /// <summary>Writes a complete chunk, such as one made by <see cref="Chunk"/>, between the ACON marker and the header.</summary>
+    public AniBuilder WithChunkBeforeHeader(byte[] chunk)
+    {
+        _chunksBeforeHeader.Add(chunk);
+        return this;
+    }
+
+    /// <summary>Writes a complete chunk into the frame list after the frames.</summary>
+    public AniBuilder WithFrameListChunk(byte[] chunk)
+    {
+        _extraFrameListChunks.Add(chunk);
+        return this;
+    }
+
+    /// <summary>Writes the frame list before the header rather than after it.</summary>
+    public AniBuilder WithFrameListBeforeHeader()
+    {
+        _frameListBeforeHeader = true;
+        return this;
+    }
+
+    /// <summary>
+    /// A chunk with the given id and data. RIFF pads odd sized data with one byte, which <paramref name="pad"/> can leave
+    /// out to imitate writers that forget it.
+    /// </summary>
+    public static byte[] Chunk(string id, byte[] data, bool pad = true)
+    {
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream);
+
+        WriteChunkHeader(writer, id, data.Length);
+        writer.Write(data);
+        if (pad && data.Length % 2 != 0)
+            writer.Write((byte)0);
+
+        writer.Flush();
+        return stream.ToArray();
+    }
+
+    /// <summary>A <c>LIST INFO</c> chunk holding the given sub-chunks.</summary>
+    public static byte[] InfoList(params byte[][] subChunks)
+        => Chunk("LIST", [.. Encoding.ASCII.GetBytes("INFO"), .. subChunks.SelectMany(chunk => chunk)]);
+
     public byte[] Build()
     {
         _frameOffsets.Clear();
 
-        var frameListSize = 4 + _frames.Sum(frame => 8 + Padded(frame.Length));
-        var riffSize = 4
-            + 8 + HeaderSize
-            + (_rates is null ? 0 : 8 + (4 * _rates.Length))
-            + (_sequence is null ? 0 : 8 + (4 * _sequence.Length))
-            + 8 + frameListSize;
-
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
-        WriteChunkHeader(writer, "RIFF", riffSize);
+        writer.Write(Encoding.ASCII.GetBytes("RIFF"));
+        writer.Write(0u);
         writer.Write(Encoding.ASCII.GetBytes("ACON"));
+
+        foreach (var chunk in _chunksBeforeHeader)
+            writer.Write(chunk);
+
+        if (_frameListBeforeHeader)
+            WriteFrameList(writer);
 
         WriteChunkHeader(writer, "anih", HeaderSize);
         writer.Write((uint)HeaderSize);
-        writer.Write((uint)_frames.Count);
-        writer.Write((uint)(_sequence?.Length ?? _frames.Count));
+        writer.Write(_frameCount ?? (uint)_frames.Count);
+        writer.Write(_stepCount ?? (uint)(_sequence?.Length ?? _frames.Count));
         writer.Write(0u);
         writer.Write(0u);
         writer.Write(0u);
         writer.Write(0u);
         writer.Write(DisplayRate);
-        writer.Write(IconFlag | (_sequence is null ? 0 : SequenceFlag));
+        writer.Write(_flags ?? (IconFlag | (_sequence is null ? 0 : SequenceFlag)));
 
         if (_rates is not null)
             WriteValues(writer, "rate", _rates);
@@ -99,19 +170,33 @@ internal sealed class AniBuilder
         if (_sequence is not null)
             WriteValues(writer, "seq ", _sequence);
 
+        if (!_frameListBeforeHeader)
+            WriteFrameList(writer);
+
+        writer.Flush();
+        var bytes = stream.ToArray();
+        BitConverter.GetBytes((uint)(bytes.Length - 8)).CopyTo(bytes, 4);
+
+        return bytes;
+    }
+
+    private void WriteFrameList(BinaryWriter writer)
+    {
+        var frameListSize = 4 + _frames.Sum(frame => 8 + Padded(frame.Length)) + _extraFrameListChunks.Sum(chunk => chunk.Length);
+
         WriteChunkHeader(writer, "LIST", frameListSize);
         writer.Write(Encoding.ASCII.GetBytes("fram"));
         foreach (var frame in _frames)
         {
             WriteChunkHeader(writer, "icon", frame.Length);
-            _frameOffsets.Add(stream.Position);
+            _frameOffsets.Add(writer.BaseStream.Position);
             writer.Write(frame);
             if (frame.Length % 2 != 0)
                 writer.Write((byte)0);
         }
 
-        writer.Flush();
-        return stream.ToArray();
+        foreach (var chunk in _extraFrameListChunks)
+            writer.Write(chunk);
     }
 
     private static void WriteChunkHeader(BinaryWriter writer, string id, int size)

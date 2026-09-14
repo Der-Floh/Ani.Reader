@@ -2,6 +2,7 @@
 
 [![NuGet Version](https://img.shields.io/nuget/vpre/Ani.Reader)](https://www.nuget.org/packages/Ani.Reader)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Ani.Reader)](https://www.nuget.org/packages/Ani.Reader)
+[![CI](https://github.com/Der-Floh/Ani.Reader/actions/workflows/ci.yml/badge.svg)](https://github.com/Der-Floh/Ani.Reader/actions/workflows/ci.yml)
 
 **`Ani.Reader`** is a cross-platform library designed for extracting animated cursors from `.ani` **files**, as well as from **embedded resources** within `.exe` **and** `.dll` files.
 
